@@ -1,41 +1,141 @@
-import { BurstGroup } from "../types";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { BurstGroup, DateSection } from "../types";
 import { Thumbnail } from "./Thumbnail";
 
+const INITIAL_VISIBLE = 60;
+const LOAD_MORE_COUNT = 60;
+const SCROLL_THRESHOLD = 300; // px from bottom to trigger load more
+
 interface BurstGridProps {
-  groups: BurstGroup[];
+  sections: DateSection[];
   onGroupClick: (group: BurstGroup) => void;
   onImageClick: (groupId: number, imageIndex: number) => void;
 }
 
 export function BurstGrid({
-  groups,
+  sections,
   onGroupClick,
   onImageClick,
 }: BurstGridProps) {
-  if (groups.length === 0) {
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Reset visible count when sections change (new folder scanned or sort order changed)
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE);
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [sections]);
+
+  // Flatten all groups across all sections to count and slice them
+  const allGroups = useMemo(
+    () => sections.flatMap((s) => s.groups),
+    [sections]
+  );
+  const totalGroups = allGroups.length;
+  const hasMore = visibleCount < totalGroups;
+
+  // Build the visible sections by slicing the flattened groups up to visibleCount,
+  // then re-grouping them back into their date sections
+  const visibleSections = useMemo(() => {
+    let remaining = visibleCount;
+    const result: DateSection[] = [];
+
+    for (const section of sections) {
+      if (remaining <= 0) break;
+
+      if (section.groups.length <= remaining) {
+        // Entire section fits
+        result.push(section);
+        remaining -= section.groups.length;
+      } else {
+        // Partial section - slice the groups
+        const partialGroups = section.groups.slice(0, remaining);
+        result.push({
+          ...section,
+          groups: partialGroups,
+          totalPhotos: partialGroups.reduce((sum, g) => sum + g.count, 0),
+        });
+        remaining = 0;
+      }
+    }
+
+    return result;
+  }, [sections, visibleCount]);
+
+  // Scroll handler - load more when near the bottom
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || !hasMore) return;
+
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom < SCROLL_THRESHOLD) {
+      setVisibleCount((prev) => Math.min(prev + LOAD_MORE_COUNT, totalGroups));
+    }
+  }, [hasMore, totalGroups]);
+
+  if (sections.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-500">
         <div className="text-center">
           <div className="text-4xl mb-4">📷</div>
           <p className="text-lg">No photos found</p>
-          <p className="text-sm mt-1">Select a folder containing images</p>
+          <p className="text-sm mt-1">
+            Double-click a folder in the sidebar to scan for photos
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-        {groups.map((group) => (
-          <BurstGroupCard
-            key={group.id}
-            group={group}
-            onGroupClick={() => onGroupClick(group)}
-            onImageClick={(idx) => onImageClick(group.id, idx)}
-          />
-        ))}
-      </div>
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-y-auto p-4"
+      onScroll={handleScroll}
+    >
+      {visibleSections.map((section) => (
+        <div key={section.date} className="mb-6">
+          {/* Date section header */}
+          <div className="flex items-center gap-3 mb-3 px-1">
+            <h2 className="text-sm font-semibold text-gray-200">
+              {section.displayDate}
+            </h2>
+            <span className="text-xs text-gray-500">
+              {section.totalPhotos} photo{section.totalPhotos !== 1 ? "s" : ""}
+            </span>
+            <div className="flex-1 border-t border-gray-800" />
+          </div>
+
+          {/* Grid of burst groups for this date */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {section.groups.map((group) => (
+              <BurstGroupCard
+                key={group.id}
+                group={group}
+                onGroupClick={() => onGroupClick(group)}
+                onImageClick={(idx) => onImageClick(group.id, idx)}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* Load more indicator */}
+      {hasMore && (
+        <div className="flex items-center justify-center py-6 text-gray-500 text-xs">
+          <div className="w-4 h-4 border-2 border-gray-700 border-t-gray-400 rounded-full animate-spin mr-2" />
+          Loading more... ({visibleCount} / {totalGroups} groups)
+        </div>
+      )}
+
+      {/* Bottom padding */}
+      {!hasMore && totalGroups > 0 && (
+        <div className="text-center py-4 text-xs text-gray-600">
+          {totalGroups} group{totalGroups !== 1 ? "s" : ""} total
+        </div>
+      )}
     </div>
   );
 }
