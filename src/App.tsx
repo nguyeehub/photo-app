@@ -33,6 +33,7 @@ function App() {
   // Sidebar state
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [scannedPaths, setScannedPaths] = useState<Set<string>>(new Set());
   const [favourites, setFavourites] = useState<FavouriteFolder[]>([]);
 
   // Derive date sections from groups + sort order
@@ -82,6 +83,7 @@ function App() {
       });
       setGroups(result.groups);
       setTotalImages(result.total_images);
+      setScannedPaths((prev) => new Set(prev).add(path));
     } catch (err) {
       console.error("Failed to scan directory:", err);
       setGroups([]);
@@ -161,6 +163,8 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col">
+      <h1 className="sr-only">Photo Explorer</h1>
+
       {/* Top header bar */}
       <DirectoryPicker
         directory={directory}
@@ -186,6 +190,7 @@ function App() {
           width={sidebarWidth}
           onWidthChange={setSidebarWidth}
           visible={sidebarVisible}
+          scannedPaths={scannedPaths}
         />
 
         {/* Main content area */}

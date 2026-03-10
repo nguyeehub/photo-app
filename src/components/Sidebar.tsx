@@ -18,6 +18,8 @@ interface SidebarProps {
   onWidthChange: (width: number) => void;
   /** Whether the sidebar is visible */
   visible: boolean;
+  /** Set of folder paths that have been scanned this session */
+  scannedPaths: Set<string>;
 }
 
 export function Sidebar({
@@ -28,6 +30,7 @@ export function Sidebar({
   width,
   onWidthChange,
   visible,
+  scannedPaths,
 }: SidebarProps) {
   const [homeDir, setHomeDir] = useState<string | null>(null);
   const [volumes, setVolumes] = useState<VolumeInfo[]>([]);
@@ -85,61 +88,69 @@ export function Sidebar({
     [width, onWidthChange]
   );
 
-  if (!visible) return null;
-
   return (
     <div
       ref={sidebarRef}
-      className="flex shrink-0 h-full border-r border-gray-800 bg-gray-950"
-      style={{ width: `${width}px` }}
+      className="flex shrink-0 h-full border-r border-warm-800 bg-warm-950 transition-[width,opacity] duration-200 ease-out overflow-hidden"
+      style={{ width: visible ? `${width}px` : '0px', opacity: visible ? 1 : 0 }}
+      aria-hidden={!visible}
     >
       {/* Sidebar content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden py-2">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden py-2" style={{ minWidth: `${width}px` }}>
         {/* Favourites section */}
         <SidebarSection
-          title="FAVOURITES"
+          title="Favourites"
           collapsed={favouritesCollapsed}
           onToggle={() => setFavouritesCollapsed((v) => !v)}
         >
           {favourites.length === 0 ? (
-            <div className="px-5 py-2 text-[10px] text-gray-600 italic">
+            <div className="px-5 py-2 text-[11px] text-warm-600 italic">
               No favourites yet
             </div>
           ) : (
             favourites.map((fav) => (
-              <div
+              <button
+                type="button"
                 key={fav.path}
-                className={`flex items-center gap-1.5 px-4 py-1 cursor-pointer group rounded-sm mx-1 transition-colors ${
+                className={`flex items-center gap-1.5 px-4 py-1.5 cursor-pointer group rounded-md mx-1 transition-colors w-full text-left ${
                   activePath === fav.path
-                    ? "bg-blue-600/20 text-blue-300"
+                    ? "bg-accent-600/15 text-accent-400"
                     : fav.exists
-                      ? "text-gray-300 hover:bg-gray-800 hover:text-white"
-                      : "text-gray-600 line-through"
+                      ? "text-warm-300 hover:bg-warm-800/70 hover:text-warm-100"
+                      : "text-warm-600 line-through"
                 }`}
                 onClick={() => fav.exists && onFolderSelect(fav.path)}
+                aria-label={`Open ${fav.name}`}
+                disabled={!fav.exists}
               >
                 <svg
-                  className="w-3.5 h-3.5 shrink-0 text-yellow-500"
+                  className="w-3.5 h-3.5 shrink-0 text-amber-400"
                   fill="currentColor"
                   viewBox="0 0 20 20"
+                  aria-hidden="true"
                 >
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
                 <span className="text-xs truncate">{fav.name}</span>
+                {scannedPaths.has(fav.path) && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent-500/50 shrink-0" title="Previously scanned" />
+                )}
                 {/* Remove from favourites button */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onToggleFavourite(fav.path);
                   }}
-                  className="ml-auto opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-opacity cursor-pointer"
+                  className="ml-auto opacity-0 group-hover:opacity-100 text-warm-500 hover:text-red-400 transition-opacity cursor-pointer p-0.5"
                   title="Remove from favourites"
+                  aria-label={`Remove ${fav.name} from favourites`}
                 >
                   <svg
                     className="w-3 h-3"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
+                    aria-hidden="true"
                   >
                     <path
                       strokeLinecap="round"
@@ -149,14 +160,14 @@ export function Sidebar({
                     />
                   </svg>
                 </button>
-              </div>
+              </button>
             ))
           )}
         </SidebarSection>
 
         {/* Home section */}
         <SidebarSection
-          title="HOME"
+          title="Home"
           collapsed={homeCollapsed}
           onToggle={() => setHomeCollapsed((v) => !v)}
         >
@@ -166,6 +177,7 @@ export function Sidebar({
               rootName={homeDir.split("/").pop() || "Home"}
               activePath={activePath}
               onFolderSelect={onFolderSelect}
+              scannedPaths={scannedPaths}
               depth={0}
               defaultExpanded
             />
@@ -174,7 +186,7 @@ export function Sidebar({
 
         {/* Volumes section */}
         <SidebarSection
-          title="VOLUMES"
+          title="Volumes"
           collapsed={volumesCollapsed}
           onToggle={() => setVolumesCollapsed((v) => !v)}
         >
@@ -185,11 +197,12 @@ export function Sidebar({
               rootName={vol.name}
               activePath={activePath}
               onFolderSelect={onFolderSelect}
+              scannedPaths={scannedPaths}
               depth={0}
             />
           ))}
           {volumes.length === 0 && (
-            <div className="px-5 py-2 text-[10px] text-gray-600 italic">
+            <div className="px-5 py-2 text-[11px] text-warm-600 italic">
               No volumes found
             </div>
           )}
@@ -198,14 +211,17 @@ export function Sidebar({
 
       {/* Resize handle */}
       <div
-        className="w-1 cursor-col-resize hover:bg-blue-500/50 transition-colors shrink-0"
+        className="w-1 cursor-col-resize hover:bg-accent-500/40 active:bg-accent-500/60 transition-colors shrink-0"
         onMouseDown={handleMouseDown}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
       />
     </div>
   );
 }
 
-// ── Collapsible section header ─────────────────────────────────────────────
+// -- Collapsible section header ---
 
 interface SidebarSectionProps {
   title: string;
@@ -221,15 +237,17 @@ function SidebarSection({
   children,
 }: SidebarSectionProps) {
   return (
-    <div className="mb-2">
+    <div className="mb-1">
       <button
         onClick={onToggle}
-        className="flex items-center gap-1 w-full px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider hover:text-gray-300 transition-colors cursor-pointer"
+        className="flex items-center gap-1.5 w-full px-3 py-1.5 text-[11px] font-semibold text-warm-500 tracking-wide hover:text-warm-300 transition-colors cursor-pointer"
+        aria-expanded={!collapsed}
       >
         <svg
-          className={`w-3 h-3 transition-transform ${collapsed ? "" : "rotate-90"}`}
+          className={`w-3 h-3 transition-transform duration-150 ${collapsed ? "" : "rotate-90"}`}
           fill="currentColor"
           viewBox="0 0 20 20"
+          aria-hidden="true"
         >
           <path
             fillRule="evenodd"
@@ -239,7 +257,15 @@ function SidebarSection({
         </svg>
         {title}
       </button>
-      {!collapsed && children}
+      <div
+        className={`transition-[grid-template-rows] duration-200 ease-out grid ${
+          collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
+        }`}
+      >
+        <div className="overflow-hidden">
+          {children}
+        </div>
+      </div>
     </div>
   );
 }

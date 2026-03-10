@@ -48,7 +48,7 @@ export function Thumbnail({
   if (error) {
     return (
       <div
-        className={`bg-gray-800 flex items-center justify-center text-gray-500 text-xs ${className}`}
+        className={`bg-warm-800 flex items-center justify-center text-warm-500 text-xs ${className}`}
         onClick={onClick}
       >
         Failed
@@ -59,9 +59,9 @@ export function Thumbnail({
   if (!thumbnailUrl) {
     return (
       <div
-        className={`bg-gray-800 animate-pulse flex items-center justify-center ${className}`}
+        className={`bg-warm-850 animate-pulse flex items-center justify-center ${className}`}
       >
-        <div className="w-6 h-6 border-2 border-gray-600 border-t-gray-400 rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-warm-600 border-t-warm-400 rounded-full animate-spin" />
       </div>
     );
   }
@@ -70,7 +70,7 @@ export function Thumbnail({
     <img
       src={thumbnailUrl}
       alt={alt}
-      className={`object-cover ${className}`}
+      className={`object-cover animate-thumb-in ${className}`}
       onClick={onClick}
       loading="lazy"
     />

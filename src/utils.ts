@@ -1,23 +1,18 @@
 import { BurstGroup, DateSection, SortOrder } from "./types";
 
-/** Format a date string like "2025-01-15" into "January 15, 2025" */
+/** Locale-aware date formatter for section headings */
+const dateFormatter = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+
+/** Format a date string like "2025-01-15" into a locale-appropriate heading */
 export function formatDateHeading(dateStr: string): string {
   const [year, month, day] = dateStr.split("-").map(Number);
-  const months = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
-  return `${months[month - 1]} ${day}, ${year}`;
+  // Use UTC to avoid timezone shifts from the raw date parts
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return dateFormatter.format(date);
 }
 
 /** Group burst groups into date sections and apply sort order */

@@ -1,8 +1,116 @@
 @import "tailwindcss";
 
+/* ── Design Tokens ─────────────────────────────────────────────────────── */
+
+@theme {
+  /* Warm neutral palette -- shifted from cool gray to stone/warm */
+  --color-warm-50: oklch(0.985 0.002 75);
+  --color-warm-100: oklch(0.97 0.003 75);
+  --color-warm-200: oklch(0.92 0.004 75);
+  --color-warm-300: oklch(0.87 0.005 75);
+  --color-warm-400: oklch(0.71 0.007 75);
+  --color-warm-500: oklch(0.55 0.008 75);
+  --color-warm-600: oklch(0.44 0.008 75);
+  --color-warm-700: oklch(0.37 0.007 65);
+  --color-warm-800: oklch(0.25 0.006 60);
+  --color-warm-850: oklch(0.20 0.005 55);
+  --color-warm-900: oklch(0.16 0.005 50);
+  --color-warm-950: oklch(0.12 0.004 45);
+
+  /* Accent -- warm blue, slightly less clinical than default blue */
+  --color-accent-400: oklch(0.72 0.17 245);
+  --color-accent-500: oklch(0.65 0.2 248);
+  --color-accent-600: oklch(0.55 0.22 250);
+
+  /* Thumbnail load-in animation */
+  --animate-thumb-in: thumb-in 0.35s ease-out both;
+
+  /* View transitions */
+  --animate-fade-in: fade-in 0.2s ease-out both;
+  --animate-slide-up: slide-up 0.3s ease-out both;
+}
+
+/* ── Keyframes ─────────────────────────────────────────────────────────── */
+
+@keyframes thumb-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Base Styles ───────────────────────────────────────────────────────── */
+
 @layer base {
   body {
-    @apply bg-gray-950 text-gray-100 m-0 p-0 overflow-hidden;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    @apply bg-warm-950 text-warm-100 m-0 p-0 overflow-hidden;
+    font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Visible focus indicators for keyboard navigation */
+  :focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Remove default button focus outline -- we use focus-visible above */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+/* ── Reduced Motion ────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Scrollbar styling ─────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(0.3 0.005 60);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.4 0.005 60);
 }
