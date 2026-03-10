@@ -14,7 +14,6 @@ import { DirectoryPicker } from "./components/DirectoryPicker";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { BurstGrid } from "./components/BurstGrid";
-import { GroupView } from "./components/GroupView";
 import { ImagePreview } from "./components/ImagePreview";
 import { LoadingOverlay } from "./components/LoadingOverlay";
 import { useSelection } from "./hooks/useSelection";
@@ -25,7 +24,6 @@ function App() {
   const [totalImages, setTotalImages] = useState(0);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("groups");
-  const [selectedGroup, setSelectedGroup] = useState<BurstGroup | null>(null);
   const [previewImages, setPreviewImages] = useState<{
     groupId: number;
     imageIndex: number;
@@ -86,14 +84,10 @@ function App() {
 
   // Compute all visible image paths (for Cmd+A select all)
   const allVisiblePaths = useMemo(() => {
-    const sections =
-      viewMode === "group-detail" && selectedGroup
-        ? [] // Group view handles its own paths
-        : displaySections;
-    return sections.flatMap((s) =>
+    return displaySections.flatMap((s) =>
       s.groups.flatMap((g) => g.images.map((img) => img.path))
     );
-  }, [displaySections, viewMode, selectedGroup]);
+  }, [displaySections]);
 
   // Load favourites on mount
   useEffect(() => {
@@ -138,20 +132,10 @@ function App() {
 
       // Cmd+A to select all visible images
       if ((e.metaKey || e.ctrlKey) && e.key === "a") {
-        // Only when in groups or group-detail view, not in preview
-        if (viewMode !== "preview") {
+        // Only when in groups view, not in preview
+        if (viewMode === "groups") {
           e.preventDefault();
-          if (viewMode === "group-detail" && selectedGroup) {
-            // Select all images in the group (filtered if needed)
-            const groupPaths = showFavouritesOnly
-              ? selectedGroup.images
-                  .filter((img) => favouritePhotos.has(img.path))
-                  .map((img) => img.path)
-              : selectedGroup.images.map((img) => img.path);
-            selection.selectAll(groupPaths);
-          } else {
-            selection.selectAll(allVisiblePaths);
-          }
+          selection.selectAll(allVisiblePaths);
         }
       }
 
@@ -166,14 +150,7 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    viewMode,
-    allVisiblePaths,
-    selection,
-    selectedGroup,
-    showFavouritesOnly,
-    favouritePhotos,
-  ]);
+  }, [viewMode, allVisiblePaths, selection]);
 
   // Clear selection when changing folders, view mode, or filter
   useEffect(() => {
@@ -202,7 +179,6 @@ function App() {
     setDirectory(path);
     setLoading(true);
     setViewMode("groups");
-    setSelectedGroup(null);
     setPreviewImages(null);
 
     try {
@@ -274,7 +250,6 @@ function App() {
   );
 
   const handleGroupClick = useCallback((group: BurstGroup) => {
-    setSelectedGroup(group);
     setPreviewImages({ groupId: group.id, imageIndex: 0 });
     setViewMode("preview");
   }, []);
@@ -287,36 +262,16 @@ function App() {
     []
   );
 
-  const handleBackToGroups = useCallback(() => {
-    setSelectedGroup(null);
-    setViewMode("groups");
-  }, []);
-
   const handleClosePreview = useCallback(() => {
     setPreviewImages(null);
-    setViewMode(selectedGroup ? "group-detail" : "groups");
-  }, [selectedGroup]);
+    setViewMode("groups");
+  }, []);
 
   const handleNavigatePreview = useCallback((index: number) => {
     setPreviewImages((prev) =>
       prev ? { ...prev, imageIndex: index } : null
     );
   }, []);
-
-  // When filter is active and viewing a group, filter the group's images
-  const displaySelectedGroup = useMemo(() => {
-    if (!selectedGroup) return null;
-    if (!showFavouritesOnly) return selectedGroup;
-
-    const favImages = selectedGroup.images.filter((img) =>
-      favouritePhotos.has(img.path)
-    );
-    return {
-      ...selectedGroup,
-      images: favImages,
-      count: favImages.length,
-    };
-  }, [selectedGroup, showFavouritesOnly, favouritePhotos]);
 
   const getPreviewContext = () => {
     if (!previewImages) return null;
@@ -399,23 +354,7 @@ function App() {
             />
           )}
 
-          {!loading &&
-            viewMode === "group-detail" &&
-            displaySelectedGroup && (
-              <GroupView
-                group={displaySelectedGroup}
-                onBack={handleBackToGroups}
-                onImageClick={(idx) =>
-                  handleImageClick(displaySelectedGroup.id, idx)
-                }
-                favouritePhotos={favouritePhotos}
-                onToggleFavourite={toggleFavouritePhoto}
-                selectedPaths={selection.selectedPaths}
-                onItemClick={selection.handleItemClick}
-                onSelectionChange={handleMarqueeSelectionChange}
-                setFlatList={selection.setFlatList}
-              />
-            )}
+
         </div>
       </div>
 

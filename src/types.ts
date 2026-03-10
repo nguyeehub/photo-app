@@ -27,7 +27,7 @@ export interface CacheClearResult {
   bytes_freed: number;
 }
 
-export type ViewMode = "groups" | "group-detail" | "preview";
+export type ViewMode = "groups" | "preview";
 
 export type SortOrder = "newest" | "oldest";
 
