@@ -275,7 +275,8 @@ function App() {
 
   const handleGroupClick = useCallback((group: BurstGroup) => {
     setSelectedGroup(group);
-    setViewMode("group-detail");
+    setPreviewImages({ groupId: group.id, imageIndex: 0 });
+    setViewMode("preview");
   }, []);
 
   const handleImageClick = useCallback(
