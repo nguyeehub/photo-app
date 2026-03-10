@@ -17,6 +17,7 @@ import { BurstGrid } from "./components/BurstGrid";
 import { GroupView } from "./components/GroupView";
 import { ImagePreview } from "./components/ImagePreview";
 import { LoadingOverlay } from "./components/LoadingOverlay";
+import { useSelection } from "./hooks/useSelection";
 
 function App() {
   const [directory, setDirectory] = useState<string | null>(null);
@@ -42,6 +43,9 @@ function App() {
     new Map()
   );
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
+
+  // Multi-selection state
+  const selection = useSelection();
 
   // Derive date sections from groups + sort order
   const dateSections = useMemo(
@@ -79,6 +83,17 @@ function App() {
       })
       .filter((s): s is NonNullable<typeof s> => s !== null);
   }, [dateSections, showFavouritesOnly, favouritePhotos]);
+
+  // Compute all visible image paths (for Cmd+A select all)
+  const allVisiblePaths = useMemo(() => {
+    const sections =
+      viewMode === "group-detail" && selectedGroup
+        ? [] // Group view handles its own paths
+        : displaySections;
+    return sections.flatMap((s) =>
+      s.groups.flatMap((g) => g.images.map((img) => img.path))
+    );
+  }, [displaySections, viewMode, selectedGroup]);
 
   // Load favourites on mount
   useEffect(() => {
@@ -120,11 +135,68 @@ function App() {
         e.preventDefault();
         setSidebarVisible((v) => !v);
       }
+
+      // Cmd+A to select all visible images
+      if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+        // Only when in groups or group-detail view, not in preview
+        if (viewMode !== "preview") {
+          e.preventDefault();
+          if (viewMode === "group-detail" && selectedGroup) {
+            // Select all images in the group (filtered if needed)
+            const groupPaths = showFavouritesOnly
+              ? selectedGroup.images
+                  .filter((img) => favouritePhotos.has(img.path))
+                  .map((img) => img.path)
+              : selectedGroup.images.map((img) => img.path);
+            selection.selectAll(groupPaths);
+          } else {
+            selection.selectAll(allVisiblePaths);
+          }
+        }
+      }
+
+      // Escape to clear selection
+      if (e.key === "Escape") {
+        if (selection.hasSelection) {
+          e.preventDefault();
+          selection.clearSelection();
+        }
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [
+    viewMode,
+    allVisiblePaths,
+    selection,
+    selectedGroup,
+    showFavouritesOnly,
+    favouritePhotos,
+  ]);
+
+  // Clear selection when changing folders, view mode, or filter
+  useEffect(() => {
+    selection.clearSelection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [directory, showFavouritesOnly, viewMode]);
+
+  // Handle marquee selection -- merge with existing selection if additive
+  const handleMarqueeSelectionChange = useCallback(
+    (paths: Set<string>, additive: boolean) => {
+      if (additive) {
+        // Merge with current selection: keep everything that was already selected + new marquee
+        const merged = new Set(selection.selectedPaths);
+        for (const p of paths) {
+          merged.add(p);
+        }
+        selection.setSelectedPaths(merged);
+      } else {
+        selection.setSelectedPaths(paths);
+      }
+    },
+    [selection]
+  );
 
   const handleFolderSelect = useCallback(async (path: string) => {
     setDirectory(path);
@@ -306,6 +378,8 @@ function App() {
               onToggleShowFavourites={() =>
                 setShowFavouritesOnly((v) => !v)
               }
+              selectedCount={selection.selectedCount}
+              onClearSelection={selection.clearSelection}
             />
           )}
 
@@ -317,6 +391,10 @@ function App() {
               onGroupClick={handleGroupClick}
               onImageClick={handleImageClick}
               favouritePhotos={favouritePhotos}
+              selectedPaths={selection.selectedPaths}
+              onItemClick={selection.handleItemClick}
+              onSelectionChange={handleMarqueeSelectionChange}
+              setFlatList={selection.setFlatList}
             />
           )}
 
@@ -331,6 +409,10 @@ function App() {
                 }
                 favouritePhotos={favouritePhotos}
                 onToggleFavourite={toggleFavouritePhoto}
+                selectedPaths={selection.selectedPaths}
+                onItemClick={selection.handleItemClick}
+                onSelectionChange={handleMarqueeSelectionChange}
+                setFlatList={selection.setFlatList}
               />
             )}
         </div>

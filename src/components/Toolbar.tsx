@@ -9,6 +9,8 @@ interface ToolbarProps {
   totalGroups: number;
   showFavouritesOnly: boolean;
   onToggleShowFavourites: () => void;
+  selectedCount: number;
+  onClearSelection: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -26,6 +28,8 @@ export function Toolbar({
   totalGroups,
   showFavouritesOnly,
   onToggleShowFavourites,
+  selectedCount,
+  onClearSelection,
 }: ToolbarProps) {
   const [cacheSize, setCacheSize] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);
@@ -114,11 +118,30 @@ export function Toolbar({
         </button>
       </div>
 
-      {/* Center: stats */}
-      <div className="flex items-center gap-4 text-xs text-warm-500 tabular-nums">
-        <span>{totalImages} photos</span>
-        <span className="text-warm-700">&middot;</span>
-        <span>{totalGroups} groups</span>
+      {/* Center: stats or selection indicator */}
+      <div className="flex items-center gap-4 text-xs tabular-nums">
+        {selectedCount > 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="text-blue-400 font-medium">
+              {selectedCount} photo{selectedCount !== 1 ? "s" : ""} selected
+            </span>
+            <button
+              onClick={onClearSelection}
+              className="text-warm-500 hover:text-warm-200 transition-colors cursor-pointer"
+              title="Clear selection (Esc)"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <>
+            <span className="text-warm-500">{totalImages} photos</span>
+            <span className="text-warm-700">&middot;</span>
+            <span className="text-warm-500">{totalGroups} groups</span>
+          </>
+        )}
       </div>
 
       {/* Right: cache controls */}

@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { BurstGroup, DateSection } from "../types";
 import { Thumbnail } from "./Thumbnail";
+import { SelectionMarquee } from "./SelectionMarquee";
+import { useMarqueeSelection } from "../hooks/useMarqueeSelection";
+import { useDragOut } from "../hooks/useDragOut";
 
 const INITIAL_VISIBLE = 60;
 const LOAD_MORE_COUNT = 60;
@@ -11,6 +14,15 @@ interface BurstGridProps {
   onGroupClick: (group: BurstGroup) => void;
   onImageClick: (groupId: number, imageIndex: number) => void;
   favouritePhotos: Map<string, number>;
+  // Selection props
+  selectedPaths: Set<string>;
+  onItemClick: (
+    paths: string[],
+    flatIndex: number,
+    event: React.MouseEvent
+  ) => void;
+  onSelectionChange: (paths: Set<string>, additive: boolean) => void;
+  setFlatList: (list: string[][]) => void;
 }
 
 export function BurstGrid({
@@ -18,6 +30,10 @@ export function BurstGrid({
   onGroupClick,
   onImageClick,
   favouritePhotos,
+  selectedPaths,
+  onItemClick,
+  onSelectionChange,
+  setFlatList,
 }: BurstGridProps) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -66,6 +82,18 @@ export function BurstGrid({
     return result;
   }, [sections, visibleCount]);
 
+  // Build the flat list of path-groups for range selection + marquee
+  const flatPathGroups = useMemo(() => {
+    return visibleSections.flatMap((s) =>
+      s.groups.map((g) => g.images.map((img) => img.path))
+    );
+  }, [visibleSections]);
+
+  // Keep the selection hook's flat list in sync
+  useEffect(() => {
+    setFlatList(flatPathGroups);
+  }, [flatPathGroups, setFlatList]);
+
   // Scroll handler - load more when near the bottom
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -76,6 +104,20 @@ export function BurstGrid({
       setVisibleCount((prev) => Math.min(prev + LOAD_MORE_COUNT, totalGroups));
     }
   }, [hasMore, totalGroups]);
+
+  // Marquee selection
+  const { marqueeRect, handleMouseDown: handleMarqueeMouseDown } =
+    useMarqueeSelection({
+      containerRef: scrollRef,
+      onSelectionChange,
+      enabled: true,
+    });
+
+  // Native drag-out
+  const { handleDragMouseDown } = useDragOut({
+    selectedPaths,
+    enabled: selectedPaths.size > 0,
+  });
 
   // Check if we have no sections because of favourites filter (sections passed in are already filtered)
   const hasFavourites = favouritePhotos.size > 0;
@@ -130,12 +172,19 @@ export function BurstGrid({
     );
   }
 
+  // Build a running flat index for each group
+  let runningFlatIndex = 0;
+
   return (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto px-4 pb-4 animate-fade-in"
+      className="flex-1 overflow-y-auto px-4 pb-4 animate-fade-in relative select-none"
       onScroll={handleScroll}
+      onMouseDown={handleMarqueeMouseDown}
     >
+      {/* Marquee overlay */}
+      <SelectionMarquee rect={marqueeRect} />
+
       {visibleSections.map((section) => (
         <div key={section.date} className="mb-8">
           {/* Date section header -- sticky, flush against toolbar */}
@@ -150,16 +199,23 @@ export function BurstGrid({
           </div>
 
           {/* Grid of burst groups for this date */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {section.groups.map((group) => (
-              <BurstGroupCard
-                key={group.id}
-                group={group}
-                onGroupClick={() => onGroupClick(group)}
-                onImageClick={(idx) => onImageClick(group.id, idx)}
-                favouritePhotos={favouritePhotos}
-              />
-            ))}
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 2xl:grid-cols-10 gap-6">
+            {section.groups.map((group) => {
+              const flatIndex = runningFlatIndex++;
+              return (
+                <BurstGroupCard
+                  key={group.id}
+                  group={group}
+                  flatIndex={flatIndex}
+                  onGroupClick={() => onGroupClick(group)}
+                  onImageClick={(idx) => onImageClick(group.id, idx)}
+                  onItemClick={onItemClick}
+                  onDragMouseDown={handleDragMouseDown}
+                  favouritePhotos={favouritePhotos}
+                  selectedPaths={selectedPaths}
+                />
+              );
+            })}
           </div>
         </div>
       ))}
@@ -184,21 +240,42 @@ export function BurstGrid({
 
 interface BurstGroupCardProps {
   group: BurstGroup;
+  flatIndex: number;
   onGroupClick: () => void;
   onImageClick: (imageIndex: number) => void;
+  onItemClick: (
+    paths: string[],
+    flatIndex: number,
+    event: React.MouseEvent
+  ) => void;
+  onDragMouseDown: (event: React.MouseEvent) => void;
   favouritePhotos: Map<string, number>;
+  selectedPaths: Set<string>;
 }
 
 function BurstGroupCard({
   group,
+  flatIndex,
   onGroupClick,
   onImageClick,
+  onItemClick,
+  onDragMouseDown,
   favouritePhotos,
+  selectedPaths,
 }: BurstGroupCardProps) {
   const isBurst = group.count > 1;
+  const groupPaths = useMemo(
+    () => group.images.map((img) => img.path),
+    [group.images]
+  );
+
+  // Check if this card is selected (any image in the group is selected)
+  const isSelected = useMemo(
+    () => groupPaths.some((p) => selectedPaths.has(p)),
+    [groupPaths, selectedPaths]
+  );
 
   // Find favourited images in this group and determine the cover image.
-  // If any image in the group is favourited, use the earliest-favourited one as cover.
   const { coverImage, hasFavourites } = useMemo(() => {
     let earliestFav: { image: typeof group.images[0]; ts: number } | null =
       null;
@@ -216,12 +293,46 @@ function BurstGroupCard({
     };
   }, [group.images, favouritePhotos]);
 
+  const handleClick = useCallback(
+    (event: React.MouseEvent) => {
+      onItemClick(groupPaths, flatIndex, event);
+    },
+    [onItemClick, groupPaths, flatIndex]
+  );
+
+  const handleDoubleClick = useCallback(() => {
+    if (isBurst) {
+      onGroupClick();
+    } else {
+      onImageClick(0);
+    }
+  }, [isBurst, onGroupClick, onImageClick]);
+
+  const handleMouseDown = useCallback(
+    (event: React.MouseEvent) => {
+      // If this card is already selected, allow drag-out initiation
+      if (isSelected) {
+        onDragMouseDown(event);
+      }
+    },
+    [isSelected, onDragMouseDown]
+  );
+
   return (
-    <button
-      type="button"
-      className="group relative rounded-xl overflow-hidden bg-warm-900 cursor-pointer text-left w-full transition-transform transition-shadow duration-200 hover:scale-[1.02] hover:shadow-xl hover:shadow-black/30"
-      onClick={() => (isBurst ? onGroupClick() : onImageClick(0))}
+    <div
+      data-selectable-paths={groupPaths.join(",")}
+      className={`group relative rounded-xl overflow-hidden bg-warm-900 cursor-pointer text-left w-full transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:shadow-black/30 ${
+        isSelected
+          ? "ring-2 ring-blue-500 ring-offset-2 ring-offset-warm-950 scale-[0.98]"
+          : ""
+      }`}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      onMouseDown={handleMouseDown}
+      role="button"
+      tabIndex={0}
       aria-label={isBurst ? `Burst group: ${group.count} photos` : coverImage.filename}
+      aria-selected={isSelected}
     >
       <div className="aspect-square overflow-hidden">
         <Thumbnail
@@ -231,6 +342,15 @@ function BurstGroupCard({
           className="w-full h-full transition-transform duration-300 group-hover:scale-105"
         />
       </div>
+
+      {/* Selection checkmark */}
+      {isSelected && (
+        <div className="absolute top-2 left-2 z-20 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center shadow-md">
+          <svg className="w-3 h-3 text-white" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+        </div>
+      )}
 
       {/* Burst count badge */}
       {isBurst && (
@@ -272,6 +392,6 @@ function BurstGroupCard({
           </p>
         )}
       </div>
-    </button>
+    </div>
   );
 }
