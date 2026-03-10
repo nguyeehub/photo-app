@@ -59,3 +59,9 @@ export interface FavouriteFolder {
   path: string;
   exists: boolean;
 }
+
+/** A favourited photo with the timestamp of when it was favourited */
+export interface FavouritePhoto {
+  path: string;
+  favourited_at: number;
+}

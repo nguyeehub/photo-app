@@ -4,6 +4,7 @@ import "./App.css";
 import {
   BurstGroup,
   FavouriteFolder,
+  FavouritePhoto,
   ScanResult,
   SortOrder,
   ViewMode,
@@ -36,11 +37,48 @@ function App() {
   const [scannedPaths, setScannedPaths] = useState<Set<string>>(new Set());
   const [favourites, setFavourites] = useState<FavouriteFolder[]>([]);
 
+  // Favourite photos state
+  const [favouritePhotos, setFavouritePhotos] = useState<Map<string, number>>(
+    new Map()
+  );
+  const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
+
   // Derive date sections from groups + sort order
   const dateSections = useMemo(
     () => groupByDate(groups, sortOrder),
     [groups, sortOrder]
   );
+
+  // Apply favourites filter when showFavouritesOnly is enabled
+  const displaySections = useMemo(() => {
+    if (!showFavouritesOnly) return dateSections;
+
+    return dateSections
+      .map((section) => {
+        const filteredGroups = section.groups
+          .map((group) => {
+            const favImages = group.images.filter((img) =>
+              favouritePhotos.has(img.path)
+            );
+            if (favImages.length === 0) return null;
+            return {
+              ...group,
+              images: favImages,
+              count: favImages.length,
+            };
+          })
+          .filter((g): g is BurstGroup => g !== null);
+
+        if (filteredGroups.length === 0) return null;
+
+        return {
+          ...section,
+          groups: filteredGroups,
+          totalPhotos: filteredGroups.reduce((sum, g) => sum + g.count, 0),
+        };
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null);
+  }, [dateSections, showFavouritesOnly, favouritePhotos]);
 
   // Load favourites on mount
   useEffect(() => {
@@ -53,6 +91,25 @@ function App() {
       }
     }
     loadFavs();
+  }, []);
+
+  // Load favourite photos on mount
+  useEffect(() => {
+    async function loadFavPhotos() {
+      try {
+        const favPhotos = await invoke<FavouritePhoto[]>(
+          "load_favourite_photos"
+        );
+        const map = new Map<string, number>();
+        for (const fp of favPhotos) {
+          map.set(fp.path, fp.favourited_at);
+        }
+        setFavouritePhotos(map);
+      } catch (err) {
+        console.error("Failed to load favourite photos:", err);
+      }
+    }
+    loadFavPhotos();
   }, []);
 
   // Keyboard shortcuts
@@ -120,6 +177,30 @@ function App() {
     [directory, favourites]
   );
 
+  const toggleFavouritePhoto = useCallback(
+    async (path: string) => {
+      const newMap = new Map(favouritePhotos);
+      if (newMap.has(path)) {
+        newMap.delete(path);
+      } else {
+        newMap.set(path, Date.now());
+      }
+      setFavouritePhotos(newMap);
+
+      // Persist
+      const favourites_list: FavouritePhoto[] = Array.from(
+        newMap.entries()
+      ).map(([p, ts]) => ({ path: p, favourited_at: ts }));
+
+      try {
+        await invoke("save_favourite_photos", { favourites: favourites_list });
+      } catch (err) {
+        console.error("Failed to save favourite photos:", err);
+      }
+    },
+    [favouritePhotos]
+  );
+
   const handleGroupClick = useCallback((group: BurstGroup) => {
     setSelectedGroup(group);
     setViewMode("group-detail");
@@ -149,12 +230,32 @@ function App() {
     );
   }, []);
 
+  // When filter is active and viewing a group, filter the group's images
+  const displaySelectedGroup = useMemo(() => {
+    if (!selectedGroup) return null;
+    if (!showFavouritesOnly) return selectedGroup;
+
+    const favImages = selectedGroup.images.filter((img) =>
+      favouritePhotos.has(img.path)
+    );
+    return {
+      ...selectedGroup,
+      images: favImages,
+      count: favImages.length,
+    };
+  }, [selectedGroup, showFavouritesOnly, favouritePhotos]);
+
   const getPreviewContext = () => {
     if (!previewImages) return null;
-    const group = groups.find((g) => g.id === previewImages.groupId);
-    if (!group) return null;
+    // Use the display group (filtered or not) for preview context
+    const sourceGroup = showFavouritesOnly
+      ? displaySections
+          .flatMap((s) => s.groups)
+          .find((g) => g.id === previewImages.groupId)
+      : groups.find((g) => g.id === previewImages.groupId);
+    if (!sourceGroup) return null;
     return {
-      images: group.images,
+      images: sourceGroup.images,
       currentIndex: previewImages.imageIndex,
     };
   };
@@ -201,6 +302,10 @@ function App() {
               onSortOrderChange={setSortOrder}
               totalImages={totalImages}
               totalGroups={groups.length}
+              showFavouritesOnly={showFavouritesOnly}
+              onToggleShowFavourites={() =>
+                setShowFavouritesOnly((v) => !v)
+              }
             />
           )}
 
@@ -208,19 +313,26 @@ function App() {
 
           {!loading && viewMode === "groups" && (
             <BurstGrid
-              sections={dateSections}
+              sections={displaySections}
               onGroupClick={handleGroupClick}
               onImageClick={handleImageClick}
+              favouritePhotos={favouritePhotos}
             />
           )}
 
-          {!loading && viewMode === "group-detail" && selectedGroup && (
-            <GroupView
-              group={selectedGroup}
-              onBack={handleBackToGroups}
-              onImageClick={(idx) => handleImageClick(selectedGroup.id, idx)}
-            />
-          )}
+          {!loading &&
+            viewMode === "group-detail" &&
+            displaySelectedGroup && (
+              <GroupView
+                group={displaySelectedGroup}
+                onBack={handleBackToGroups}
+                onImageClick={(idx) =>
+                  handleImageClick(displaySelectedGroup.id, idx)
+                }
+                favouritePhotos={favouritePhotos}
+                onToggleFavourite={toggleFavouritePhoto}
+              />
+            )}
         </div>
       </div>
 
@@ -231,6 +343,8 @@ function App() {
           currentIndex={previewContext.currentIndex}
           onClose={handleClosePreview}
           onNavigate={handleNavigatePreview}
+          favouritePhotos={favouritePhotos}
+          onToggleFavourite={toggleFavouritePhoto}
         />
       )}
     </div>

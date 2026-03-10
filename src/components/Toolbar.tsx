@@ -7,6 +7,8 @@ interface ToolbarProps {
   onSortOrderChange: (order: SortOrder) => void;
   totalImages: number;
   totalGroups: number;
+  showFavouritesOnly: boolean;
+  onToggleShowFavourites: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -22,6 +24,8 @@ export function Toolbar({
   onSortOrderChange,
   totalImages,
   totalGroups,
+  showFavouritesOnly,
+  onToggleShowFavourites,
 }: ToolbarProps) {
   const [cacheSize, setCacheSize] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);
@@ -53,33 +57,61 @@ export function Toolbar({
 
   return (
     <div className="flex items-center justify-between px-6 py-2 bg-warm-900/50 border-b border-warm-800">
-      {/* Left: sort controls */}
-      <div className="flex items-center gap-3">
-        <span className="text-[11px] text-warm-500 uppercase tracking-wide font-medium">
-          Sort
-        </span>
-        <div className="flex rounded-lg overflow-hidden border border-warm-700">
-          <button
-            onClick={() => onSortOrderChange("newest")}
-            className={`px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
-              sortOrder === "newest"
-                ? "bg-accent-600 text-white"
-                : "bg-warm-800 text-warm-400 hover:text-warm-200"
-            }`}
-          >
-            Newest First
-          </button>
-          <button
-            onClick={() => onSortOrderChange("oldest")}
-            className={`px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
-              sortOrder === "oldest"
-                ? "bg-accent-600 text-white"
-                : "bg-warm-800 text-warm-400 hover:text-warm-200"
-            }`}
-          >
-            Oldest First
-          </button>
+      {/* Left: sort controls + favourites filter */}
+      <div className="flex items-center gap-5">
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] text-warm-500 uppercase tracking-wide font-medium">
+            Sort
+          </span>
+          <div className="flex rounded-lg overflow-hidden border border-warm-700">
+            <button
+              onClick={() => onSortOrderChange("newest")}
+              className={`px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
+                sortOrder === "newest"
+                  ? "bg-accent-600 text-white"
+                  : "bg-warm-800 text-warm-400 hover:text-warm-200"
+              }`}
+            >
+              Newest First
+            </button>
+            <button
+              onClick={() => onSortOrderChange("oldest")}
+              className={`px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
+                sortOrder === "oldest"
+                  ? "bg-accent-600 text-white"
+                  : "bg-warm-800 text-warm-400 hover:text-warm-200"
+              }`}
+            >
+              Oldest First
+            </button>
+          </div>
         </div>
+
+        <button
+          onClick={onToggleShowFavourites}
+          className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
+            showFavouritesOnly
+              ? "bg-red-500/20 border-red-500/40 text-red-400"
+              : "bg-warm-800 border-warm-700 text-warm-400 hover:text-warm-200"
+          }`}
+          title="Show favourites only"
+        >
+          <svg
+            className="w-3.5 h-3.5"
+            viewBox="0 0 24 24"
+            fill={showFavouritesOnly ? "currentColor" : "none"}
+            stroke="currentColor"
+            strokeWidth={2}
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+            />
+          </svg>
+          Favourites
+        </button>
       </div>
 
       {/* Center: stats */}

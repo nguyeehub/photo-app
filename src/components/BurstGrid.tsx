@@ -10,12 +10,14 @@ interface BurstGridProps {
   sections: DateSection[];
   onGroupClick: (group: BurstGroup) => void;
   onImageClick: (groupId: number, imageIndex: number) => void;
+  favouritePhotos: Map<string, number>;
 }
 
 export function BurstGrid({
   sections,
   onGroupClick,
   onImageClick,
+  favouritePhotos,
 }: BurstGridProps) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -75,28 +77,54 @@ export function BurstGrid({
     }
   }, [hasMore, totalGroups]);
 
+  // Check if we have no sections because of favourites filter (sections passed in are already filtered)
+  const hasFavourites = favouritePhotos.size > 0;
+
   if (sections.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-warm-500 animate-fade-in">
         <div className="text-center max-w-sm">
-          {/* Stylized burst stack illustration */}
-          <div className="relative w-24 h-24 mx-auto mb-6">
-            <div className="absolute inset-0 rounded-xl bg-warm-800 rotate-[-6deg] shadow-lg" />
-            <div className="absolute inset-0 rounded-xl bg-warm-850 rotate-[-3deg] shadow-lg" />
-            <div className="absolute inset-0 rounded-xl bg-warm-900 shadow-lg flex items-center justify-center">
-              <svg className="w-10 h-10 text-warm-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-              </svg>
-            </div>
-          </div>
-          <h1 className="text-lg font-medium text-warm-200 mb-2" style={{ textWrap: 'balance' }}>
-            No Photos Found
-          </h1>
-          <p className="text-sm text-warm-500 leading-relaxed">
-            Double-click a folder in the sidebar to scan for photos, or use{" "}
-            <span className="text-warm-400 font-medium">Open Folder</span> above.
-          </p>
+          {hasFavourites ? (
+            <>
+              {/* No favourites in current view */}
+              <div className="w-16 h-16 mx-auto mb-5 flex items-center justify-center rounded-full bg-warm-900">
+                <svg className="w-8 h-8 text-warm-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                </svg>
+              </div>
+              <h1 className="text-lg font-medium text-warm-200 mb-2" style={{ textWrap: 'balance' }}>
+                No Favourites in This Folder
+              </h1>
+              <p className="text-sm text-warm-500 leading-relaxed">
+                Open a photo and press{" "}
+                <span className="text-warm-400 font-medium">Up Arrow</span>,{" "}
+                double-click, or click the{" "}
+                <span className="text-warm-400 font-medium">heart icon</span>{" "}
+                to favourite photos.
+              </p>
+            </>
+          ) : (
+            <>
+              {/* Stylized burst stack illustration */}
+              <div className="relative w-24 h-24 mx-auto mb-6">
+                <div className="absolute inset-0 rounded-xl bg-warm-800 rotate-[-6deg] shadow-lg" />
+                <div className="absolute inset-0 rounded-xl bg-warm-850 rotate-[-3deg] shadow-lg" />
+                <div className="absolute inset-0 rounded-xl bg-warm-900 shadow-lg flex items-center justify-center">
+                  <svg className="w-10 h-10 text-warm-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                  </svg>
+                </div>
+              </div>
+              <h1 className="text-lg font-medium text-warm-200 mb-2" style={{ textWrap: 'balance' }}>
+                No Photos Found
+              </h1>
+              <p className="text-sm text-warm-500 leading-relaxed">
+                Double-click a folder in the sidebar to scan for photos, or use{" "}
+                <span className="text-warm-400 font-medium">Open Folder</span> above.
+              </p>
+            </>
+          )}
         </div>
       </div>
     );
@@ -129,6 +157,7 @@ export function BurstGrid({
                 group={group}
                 onGroupClick={() => onGroupClick(group)}
                 onImageClick={(idx) => onImageClick(group.id, idx)}
+                favouritePhotos={favouritePhotos}
               />
             ))}
           </div>
@@ -157,15 +186,35 @@ interface BurstGroupCardProps {
   group: BurstGroup;
   onGroupClick: () => void;
   onImageClick: (imageIndex: number) => void;
+  favouritePhotos: Map<string, number>;
 }
 
 function BurstGroupCard({
   group,
   onGroupClick,
   onImageClick,
+  favouritePhotos,
 }: BurstGroupCardProps) {
-  const coverImage = group.images[0];
   const isBurst = group.count > 1;
+
+  // Find favourited images in this group and determine the cover image.
+  // If any image in the group is favourited, use the earliest-favourited one as cover.
+  const { coverImage, hasFavourites } = useMemo(() => {
+    let earliestFav: { image: typeof group.images[0]; ts: number } | null =
+      null;
+    for (const img of group.images) {
+      const ts = favouritePhotos.get(img.path);
+      if (ts !== undefined) {
+        if (!earliestFav || ts < earliestFav.ts) {
+          earliestFav = { image: img, ts };
+        }
+      }
+    }
+    return {
+      coverImage: earliestFav ? earliestFav.image : group.images[0],
+      hasFavourites: earliestFav !== null,
+    };
+  }, [group.images, favouritePhotos]);
 
   return (
     <button
@@ -187,6 +236,22 @@ function BurstGroupCard({
       {isBurst && (
         <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-2 py-0.5 rounded-full tabular-nums min-w-[1.5rem] text-center">
           {group.count}
+        </div>
+      )}
+
+      {/* Favourite heart badge */}
+      {hasFavourites && (
+        <div className="absolute bottom-2 right-2 z-10">
+          <svg
+            className="w-4 h-4 text-red-500 drop-shadow-md"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            stroke="currentColor"
+            strokeWidth={1}
+            aria-hidden="true"
+          >
+            <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+          </svg>
         </div>
       )}
 

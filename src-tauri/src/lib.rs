@@ -78,6 +78,13 @@ pub struct FavouriteFolder {
     pub exists: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FavouritePhoto {
+    pub path: String,
+    /// Unix timestamp in milliseconds of when the photo was favourited
+    pub favourited_at: i64,
+}
+
 // ── File detection ─────────────────────────────────────────────────────────
 
 fn is_image_file(path: &Path) -> bool {
@@ -676,6 +683,52 @@ async fn save_favourites(
     Ok(())
 }
 
+// ── Favourite photos persistence ───────────────────────────────────────────
+
+/// Get the path to the favourite photos JSON file in the app data directory.
+fn get_favourite_photos_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let app_data = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    fs::create_dir_all(&app_data).map_err(|e| format!("Failed to create app data dir: {}", e))?;
+    Ok(app_data.join("favourite_photos.json"))
+}
+
+/// Load favourite photos from persistent storage.
+#[tauri::command]
+async fn load_favourite_photos(
+    app_handle: tauri::AppHandle,
+) -> Result<Vec<FavouritePhoto>, String> {
+    let fav_path = get_favourite_photos_path(&app_handle)?;
+
+    if !fav_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let content = fs::read_to_string(&fav_path)
+        .map_err(|e| format!("Failed to read favourite photos: {}", e))?;
+
+    let favourites: Vec<FavouritePhoto> = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse favourite photos: {}", e))?;
+
+    Ok(favourites)
+}
+
+/// Save favourite photos to persistent storage.
+#[tauri::command]
+async fn save_favourite_photos(
+    app_handle: tauri::AppHandle,
+    favourites: Vec<FavouritePhoto>,
+) -> Result<(), String> {
+    let fav_path = get_favourite_photos_path(&app_handle)?;
+    let content = serde_json::to_string_pretty(&favourites)
+        .map_err(|e| format!("Failed to serialize favourite photos: {}", e))?;
+    fs::write(&fav_path, content)
+        .map_err(|e| format!("Failed to write favourite photos: {}", e))?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -691,6 +744,8 @@ pub fn run() {
             list_volumes,
             load_favourites,
             save_favourites,
+            load_favourite_photos,
+            save_favourite_photos,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

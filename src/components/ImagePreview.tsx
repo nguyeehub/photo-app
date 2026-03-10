@@ -9,10 +9,12 @@ function ThumbnailStrip({
   images,
   currentIndex,
   onNavigate,
+  favouritePhotos,
 }: {
   images: ImageInfo[];
   currentIndex: number;
   onNavigate: (index: number) => void;
+  favouritePhotos: Map<string, number>;
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
 
@@ -36,25 +38,40 @@ function ThumbnailStrip({
         ref={stripRef}
         className="flex gap-1.5 overflow-x-auto"
       >
-        {images.map((img, idx) => (
-          <button
-            key={img.path}
-            onClick={() => onNavigate(idx)}
-            className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden transition-all cursor-pointer ${
-              idx === currentIndex
-                ? "ring-2 ring-accent-500 opacity-100 scale-105"
-                : "opacity-35 hover:opacity-60"
-            }`}
-            aria-label={`View image ${idx + 1}: ${img.filename}`}
-          >
-            <Thumbnail
-              imagePath={img.path}
-              alt={img.filename}
-              size={80}
-              className="w-full h-full"
-            />
-          </button>
-        ))}
+        {images.map((img, idx) => {
+          const isFav = favouritePhotos.has(img.path);
+          return (
+            <button
+              key={img.path}
+              onClick={() => onNavigate(idx)}
+              className={`relative shrink-0 w-14 h-14 rounded-lg overflow-hidden transition-all cursor-pointer ${
+                idx === currentIndex
+                  ? "ring-2 ring-accent-500 opacity-100 scale-105"
+                  : "opacity-35 hover:opacity-60"
+              }`}
+              aria-label={`View image ${idx + 1}: ${img.filename}`}
+            >
+              <Thumbnail
+                imagePath={img.path}
+                alt={img.filename}
+                size={80}
+                className="w-full h-full"
+              />
+              {isFav && (
+                <div className="absolute bottom-0.5 right-0.5">
+                  <svg
+                    className="w-3 h-3 text-red-500 drop-shadow-md"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                  </svg>
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -65,6 +82,8 @@ interface ImagePreviewProps {
   currentIndex: number;
   onClose: () => void;
   onNavigate: (index: number) => void;
+  favouritePhotos: Map<string, number>;
+  onToggleFavourite: (path: string) => void;
 }
 
 export function ImagePreview({
@@ -72,6 +91,8 @@ export function ImagePreview({
   currentIndex,
   onClose,
   onNavigate,
+  favouritePhotos,
+  onToggleFavourite,
 }: ImagePreviewProps) {
   const currentImage = images[currentIndex];
   const hasPrev = currentIndex > 0;
@@ -85,6 +106,16 @@ export function ImagePreview({
     if (hasPrev) onNavigate(currentIndex - 1);
   }, [hasPrev, currentIndex, onNavigate]);
 
+  const toggleCurrentFavourite = useCallback(() => {
+    if (currentImage) {
+      onToggleFavourite(currentImage.path);
+    }
+  }, [currentImage, onToggleFavourite]);
+
+  const isFavourited = currentImage
+    ? favouritePhotos.has(currentImage.path)
+    : false;
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.key) {
@@ -97,12 +128,16 @@ export function ImagePreview({
         case "ArrowLeft":
           goPrev();
           break;
+        case "ArrowUp":
+          e.preventDefault();
+          toggleCurrentFavourite();
+          break;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, goNext, goPrev]);
+  }, [onClose, goNext, goPrev, toggleCurrentFavourite]);
 
   if (!currentImage) return null;
 
@@ -121,6 +156,31 @@ export function ImagePreview({
               {currentImage.timestamp_str}
             </span>
           )}
+          <button
+            onClick={toggleCurrentFavourite}
+            className={`shrink-0 p-1 rounded-md transition-colors cursor-pointer ${
+              isFavourited
+                ? "text-red-500 hover:text-red-400"
+                : "text-warm-500 hover:text-red-400"
+            }`}
+            aria-label={isFavourited ? "Remove from favourites" : "Add to favourites"}
+            title={isFavourited ? "Remove from favourites (Up Arrow)" : "Add to favourites (Up Arrow)"}
+          >
+            <svg
+              className="w-5 h-5"
+              viewBox="0 0 24 24"
+              fill={isFavourited ? "currentColor" : "none"}
+              stroke="currentColor"
+              strokeWidth={2}
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+              />
+            </svg>
+          </button>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-warm-400 tabular-nums">
@@ -157,6 +217,7 @@ export function ImagePreview({
           alt={currentImage.filename}
           className="max-w-full max-h-full object-contain select-none"
           draggable={false}
+          onDoubleClick={toggleCurrentFavourite}
         />
 
         {/* Left arrow */}
@@ -214,6 +275,7 @@ export function ImagePreview({
           images={images}
           currentIndex={currentIndex}
           onNavigate={onNavigate}
+          favouritePhotos={favouritePhotos}
         />
       )}
     </div>
