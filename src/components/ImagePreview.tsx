@@ -2,6 +2,8 @@ import { useEffect, useCallback, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ImageInfo } from "../types";
 import { Thumbnail } from "./Thumbnail";
+import { ZoomControls } from "./ZoomControls";
+import { useImageZoom } from "../hooks/useImageZoom";
 
 // ── Thumbnail strip with auto-scroll ────────────────────────────────────
 
@@ -106,6 +108,15 @@ export function ImagePreview({
   const [showLikeBurst, setShowLikeBurst] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const zoom = useImageZoom(containerRef, imageRef);
+
+  // Reset zoom when navigating to a different image
+  useEffect(() => {
+    zoom.reset();
+  }, [currentIndex]);
+
   const triggerLikeBurst = useCallback(() => {
     setLikeBurstKey((k) => k + 1);
     setShowLikeBurst(true);
@@ -135,6 +146,25 @@ export function ImagePreview({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Zoom shortcuts (Cmd/Ctrl + key)
+      if (e.metaKey || e.ctrlKey) {
+        switch (e.key) {
+          case "=":
+          case "+":
+            e.preventDefault();
+            zoom.zoomIn();
+            return;
+          case "-":
+            e.preventDefault();
+            zoom.zoomOut();
+            return;
+          case "0":
+            e.preventDefault();
+            zoom.zoomToFit();
+            return;
+        }
+      }
+
       switch (e.key) {
         case "Escape":
           onClose();
@@ -154,7 +184,7 @@ export function ImagePreview({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, goNext, goPrev, toggleCurrentFavourite]);
+  }, [onClose, goNext, goPrev, toggleCurrentFavourite, zoom]);
 
   useEffect(() => {
     if (!showLikeBurst) return;
@@ -235,7 +265,7 @@ export function ImagePreview({
       </div>
 
       {/* Image container */}
-      <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+      <div ref={containerRef} className="flex-1 relative flex items-center justify-center overflow-hidden">
         {showLikeBurst && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
             <div key={likeBurstKey} className="like-burst" aria-hidden="true">
@@ -253,12 +283,21 @@ export function ImagePreview({
         )}
 
         <img
+          ref={imageRef}
           key={currentImage.path}
           src={imageUrl}
           alt={currentImage.filename}
           className="max-w-full max-h-full object-contain select-none"
+          style={{
+            transform: zoom.transformStyle,
+            transition: zoom.shouldTransition ? "transform 200ms ease-out" : "none",
+            cursor: zoom.cursorStyle,
+            transformOrigin: "center center",
+          }}
           draggable={false}
-          onDoubleClick={toggleCurrentFavourite}
+          onMouseDown={zoom.handleMouseDown}
+          onDoubleClick={zoom.handleDoubleClick}
+          onLoad={zoom.handleImageLoad}
         />
 
         {/* Left arrow */}
@@ -308,6 +347,14 @@ export function ImagePreview({
             </svg>
           </button>
         )}
+
+        <ZoomControls
+          zoomPercent={zoom.zoomPercent}
+          isZoomed={zoom.isZoomed}
+          onZoomIn={zoom.zoomIn}
+          onZoomOut={zoom.zoomOut}
+          onZoomToFit={zoom.zoomToFit}
+        />
       </div>
 
       {/* Bottom thumbnail strip */}
