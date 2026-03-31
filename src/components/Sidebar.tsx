@@ -34,7 +34,9 @@ export function Sidebar({
 }: SidebarProps) {
   const [homeDir, setHomeDir] = useState<string | null>(null);
   const [volumes, setVolumes] = useState<VolumeInfo[]>([]);
+  const [externalDevices, setExternalDevices] = useState<VolumeInfo[]>([]);
   const [favouritesCollapsed, setFavouritesCollapsed] = useState(false);
+  const [devicesCollapsed, setDevicesCollapsed] = useState(false);
   const [homeCollapsed, setHomeCollapsed] = useState(false);
   const [volumesCollapsed, setVolumesCollapsed] = useState(false);
   const resizingRef = useRef(false);
@@ -44,12 +46,16 @@ export function Sidebar({
   useEffect(() => {
     async function init() {
       try {
-        const [home, vols] = await Promise.all([
+        const [home, vols, devices] = await Promise.all([
           invoke<string>("get_home_dir"),
           invoke<VolumeInfo[]>("list_volumes"),
+          invoke<VolumeInfo[]>("list_external_devices"),
         ]);
         setHomeDir(home);
-        setVolumes(vols);
+        // Filter external devices out of volumes to avoid duplication
+        const externalPaths = new Set(devices.map((d) => d.path));
+        setVolumes(vols.filter((v) => !externalPaths.has(v.path)));
+        setExternalDevices(devices);
       } catch (err) {
         console.error("Failed to init sidebar:", err);
       }
@@ -162,6 +168,30 @@ export function Sidebar({
                 </button>
               </button>
             ))
+          )}
+        </SidebarSection>
+
+        {/* Devices section */}
+        <SidebarSection
+          title="Devices"
+          collapsed={devicesCollapsed}
+          onToggle={() => setDevicesCollapsed((v) => !v)}
+        >
+          {externalDevices.map((dev) => (
+            <FolderTree
+              key={dev.path}
+              rootPath={dev.path}
+              rootName={dev.name}
+              activePath={activePath}
+              onFolderSelect={onFolderSelect}
+              scannedPaths={scannedPaths}
+              depth={0}
+            />
+          ))}
+          {externalDevices.length === 0 && (
+            <div className="px-5 py-2 text-[11px] text-warm-600 italic">
+              No devices connected
+            </div>
           )}
         </SidebarSection>
 

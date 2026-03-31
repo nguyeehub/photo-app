@@ -625,6 +625,71 @@ async fn list_volumes() -> Result<Vec<VolumeInfo>, String> {
     Ok(volumes)
 }
 
+/// Check if a volume at the given path is an external/removable device
+/// by inspecting `diskutil info -plist <path>` output.
+fn is_external_volume(path: &str) -> bool {
+    let output = std::process::Command::new("diskutil")
+        .args(["info", "-plist", path])
+        .output();
+
+    let output = match output {
+        Ok(o) if o.status.success() => o.stdout,
+        _ => return false,
+    };
+
+    let plist = String::from_utf8_lossy(&output);
+
+    // Helper: extract the boolean value following a given key in the plist XML.
+    // Apple's plist format is: <key>Name</key>\n<true/> or <false/>
+    let has_true_key = |key: &str| -> bool {
+        if let Some(pos) = plist.find(&format!("<key>{}</key>", key)) {
+            let after = &plist[pos..];
+            // Look at the next <true/> or <false/> tag after the key
+            let true_pos = after.find("<true/>");
+            let false_pos = after.find("<false/>");
+            match (true_pos, false_pos) {
+                (Some(t), Some(f)) => t < f,
+                (Some(_), None) => true,
+                _ => false,
+            }
+        } else {
+            false
+        }
+    };
+
+    // A volume is external if it's ejectable or has removable media
+    has_true_key("Ejectable") || has_true_key("RemovableMedia")
+}
+
+/// List external devices (USBs, SD cards, external drives) from /Volumes/.
+#[tauri::command]
+async fn list_external_devices() -> Result<Vec<VolumeInfo>, String> {
+    let volumes_path = Path::new("/Volumes");
+    if !volumes_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut devices: Vec<VolumeInfo> = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(volumes_path) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let path = entry.path().to_string_lossy().to_string();
+
+            if name.starts_with('.') {
+                continue;
+            }
+
+            if is_external_volume(&path) {
+                devices.push(VolumeInfo { name, path });
+            }
+        }
+    }
+
+    devices.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(devices)
+}
+
 /// Get the path to the favourites JSON file in the app data directory.
 fn get_favourites_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
     let app_data = app_handle
@@ -743,6 +808,7 @@ pub fn run() {
             list_directory,
             get_home_dir,
             list_volumes,
+            list_external_devices,
             load_favourites,
             save_favourites,
             load_favourite_photos,
