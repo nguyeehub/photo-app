@@ -12,8 +12,10 @@ interface UseMarqueeSelectionOptions {
   containerRef: React.RefObject<HTMLElement | null>;
   /** Attribute on selectable elements that contains a comma-separated list of paths */
   pathAttribute?: string;
-  /** Callback when marquee selection changes (called with Set of selected paths) */
-  onSelectionChange: (paths: Set<string>, additive: boolean) => void;
+  /** Current selection snapshot (used as additive base on drag start) */
+  selectedPaths: Set<string>;
+  /** Callback when marquee selection changes (called with full selected set) */
+  onSelectionChange: (paths: Set<string>) => void;
   /** Whether selection is enabled */
   enabled?: boolean;
 }
@@ -35,6 +37,7 @@ export interface UseMarqueeSelectionReturn {
 export function useMarqueeSelection({
   containerRef,
   pathAttribute = "data-selectable-paths",
+  selectedPaths,
   onSelectionChange,
   enabled = true,
 }: UseMarqueeSelectionOptions): UseMarqueeSelectionReturn {
@@ -42,8 +45,28 @@ export function useMarqueeSelection({
   const isActive = useRef(false);
   const didDrag = useRef(false);
   const startPoint = useRef({ x: 0, y: 0 });
-  const startScroll = useRef({ top: 0, left: 0 });
-  const isAdditive = useRef(false);
+  const selectionMode = useRef<"replace" | "add" | "toggle">("replace");
+  const additiveBaseSelection = useRef<Set<string>>(new Set());
+  const selectableItems = useRef<
+    Array<{
+      left: number;
+      right: number;
+      top: number;
+      bottom: number;
+      paths: string[];
+    }>
+  >([]);
+  const rafId = useRef<number | null>(null);
+  const pendingRect = useRef<MarqueeRect | null>(null);
+  const lastEmittedSelection = useRef<Set<string>>(new Set());
+
+  const areSetsEqual = useCallback((a: Set<string>, b: Set<string>) => {
+    if (a.size !== b.size) return false;
+    for (const v of a) {
+      if (!b.has(v)) return false;
+    }
+    return true;
+  }, []);
 
   const getSelectableElements = useCallback(() => {
     const container = containerRef.current;
@@ -53,43 +76,104 @@ export function useMarqueeSelection({
     ) as HTMLElement[];
   }, [containerRef, pathAttribute]);
 
+  const captureSelectableItems = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) {
+      selectableItems.current = [];
+      return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const elements = getSelectableElements();
+    selectableItems.current = elements
+      .map((el) => {
+        const elRect = el.getBoundingClientRect();
+        const paths = el
+          .getAttribute(pathAttribute)
+          ?.split(",")
+          .filter((p) => p.length > 0);
+        if (!paths || paths.length === 0) return null;
+
+        return {
+          left: elRect.left - containerRect.left + container.scrollLeft,
+          right: elRect.right - containerRect.left + container.scrollLeft,
+          top: elRect.top - containerRect.top + container.scrollTop,
+          bottom: elRect.bottom - containerRect.top + container.scrollTop,
+          paths,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+  }, [containerRef, getSelectableElements, pathAttribute]);
+
   const computeIntersection = useCallback(
     (rect: MarqueeRect) => {
-      const container = containerRef.current;
-      if (!container) return new Set<string>();
-
-      const containerRect = container.getBoundingClientRect();
-      const elements = getSelectableElements();
       const selected = new Set<string>();
 
-      // Convert marquee rect to viewport coordinates
-      const marqueeLeft = containerRect.left + rect.x;
-      const marqueeTop = containerRect.top + rect.y;
+      const marqueeLeft = rect.x;
+      const marqueeTop = rect.y;
       const marqueeRight = marqueeLeft + rect.width;
       const marqueeBottom = marqueeTop + rect.height;
 
-      for (const el of elements) {
-        const elRect = el.getBoundingClientRect();
+      for (const item of selectableItems.current) {
 
         // Check intersection
         if (
-          elRect.left < marqueeRight &&
-          elRect.right > marqueeLeft &&
-          elRect.top < marqueeBottom &&
-          elRect.bottom > marqueeTop
+          item.left < marqueeRight &&
+          item.right > marqueeLeft &&
+          item.top < marqueeBottom &&
+          item.bottom > marqueeTop
         ) {
-          const paths = el.getAttribute(pathAttribute);
-          if (paths) {
-            for (const p of paths.split(",")) {
-              if (p) selected.add(p);
-            }
+          for (const p of item.paths) {
+            selected.add(p);
           }
         }
       }
 
       return selected;
     },
-    [containerRef, getSelectableElements, pathAttribute]
+    []
+  );
+
+  const emitSelectionForRect = useCallback(
+    (rect: MarqueeRect) => {
+      const intersected = computeIntersection(rect);
+      let nextSelection: Set<string>;
+
+      if (selectionMode.current === "add") {
+        nextSelection = new Set([...additiveBaseSelection.current, ...intersected]);
+      } else if (selectionMode.current === "toggle") {
+        nextSelection = new Set(additiveBaseSelection.current);
+        for (const path of intersected) {
+          if (nextSelection.has(path)) {
+            nextSelection.delete(path);
+          } else {
+            nextSelection.add(path);
+          }
+        }
+      } else {
+        nextSelection = intersected;
+      }
+
+      if (!areSetsEqual(nextSelection, lastEmittedSelection.current)) {
+        lastEmittedSelection.current = nextSelection;
+        onSelectionChange(nextSelection);
+      }
+    },
+    [areSetsEqual, computeIntersection, onSelectionChange]
+  );
+
+  const scheduleSelectionUpdate = useCallback(
+    (rect: MarqueeRect) => {
+      pendingRect.current = rect;
+      if (rafId.current !== null) return;
+
+      rafId.current = window.requestAnimationFrame(() => {
+        rafId.current = null;
+        if (!pendingRect.current) return;
+        emitSelectionForRect(pendingRect.current);
+      });
+    },
+    [emitSelectionForRect]
   );
 
   const handleMouseDown = useCallback(
@@ -120,15 +204,17 @@ export function useMarqueeSelection({
       const y = event.clientY - containerRect.top + container.scrollTop;
 
       startPoint.current = { x, y };
-      startScroll.current = {
-        top: container.scrollTop,
-        left: container.scrollLeft,
-      };
       isActive.current = true;
       didDrag.current = false;
-      isAdditive.current = event.metaKey || event.ctrlKey;
+      const isMeta = event.metaKey || event.ctrlKey;
+      const isShift = event.shiftKey;
+      selectionMode.current = isShift ? "toggle" : isMeta ? "add" : "replace";
+      additiveBaseSelection.current =
+        selectionMode.current === "replace" ? new Set() : new Set(selectedPaths);
+      captureSelectableItems();
+      lastEmittedSelection.current = new Set(selectedPaths);
     },
-    [enabled, containerRef]
+    [enabled, containerRef, selectedPaths, captureSelectableItems]
   );
 
   useEffect(() => {
@@ -143,15 +229,10 @@ export function useMarqueeSelection({
       const currentY =
         event.clientY - containerRect.top + container.scrollTop;
 
-      const scrollDelta =
-        container.scrollTop - startScroll.current.top;
-
       const x = Math.min(startPoint.current.x, currentX);
-      const y = Math.min(startPoint.current.y + scrollDelta, currentY);
+      const y = Math.min(startPoint.current.y, currentY);
       const width = Math.abs(currentX - startPoint.current.x);
-      const height = Math.abs(
-        currentY - (startPoint.current.y + scrollDelta)
-      );
+      const height = Math.abs(currentY - startPoint.current.y);
 
       // Minimum 5px movement to start showing the marquee
       if (width < 5 && height < 5) return;
@@ -161,14 +242,7 @@ export function useMarqueeSelection({
       setMarqueeRect(rect);
 
       // Compute what's intersected and notify -- convert to viewport-relative for intersection
-      const viewportRect: MarqueeRect = {
-        x,
-        y: y - container.scrollTop,
-        width,
-        height,
-      };
-      const intersected = computeIntersection(viewportRect);
-      onSelectionChange(intersected, isAdditive.current);
+      scheduleSelectionUpdate(rect);
     };
 
     const handleMouseUp = () => {
@@ -177,11 +251,17 @@ export function useMarqueeSelection({
         isActive.current = false;
         didDrag.current = false;
         setMarqueeRect(null);
+        pendingRect.current = null;
+        selectableItems.current = [];
+        if (rafId.current !== null) {
+          window.cancelAnimationFrame(rafId.current);
+          rafId.current = null;
+        }
 
         // If mousedown was on empty space but no drag happened (just a click),
         // clear the selection -- standard Finder behavior
-        if (!wasDrag && !isAdditive.current) {
-          onSelectionChange(new Set(), false);
+        if (!wasDrag && selectionMode.current === "replace") {
+          onSelectionChange(new Set());
         }
       }
     };
@@ -192,7 +272,7 @@ export function useMarqueeSelection({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [containerRef, computeIntersection, onSelectionChange]);
+  }, [containerRef, onSelectionChange, scheduleSelectionUpdate]);
 
   return {
     marqueeRect,

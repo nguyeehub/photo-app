@@ -27,7 +27,7 @@ export interface UseSelectionReturn {
   /** Number of selected paths */
   selectedCount: number;
   /** Set selected paths directly (used by marquee selection) */
-  setSelectedPaths: (paths: Set<string>) => void;
+  setSelectedPaths: React.Dispatch<React.SetStateAction<Set<string>>>;
   /** The flat list used for range selection -- must be set by the consumer */
   setFlatList: (list: string[][]) => void;
 }
@@ -53,6 +53,17 @@ export function useSelection(): UseSelectionReturn {
     (paths: string[], flatIndex: number, event: React.MouseEvent) => {
       const isMeta = event.metaKey || event.ctrlKey;
       const isShift = event.shiftKey;
+      const isAlreadySelected = paths.every((p) => selectedPaths.has(p));
+
+      if (isShift && !isMeta && isAlreadySelected) {
+        const newSet = new Set(selectedPaths);
+        for (const p of paths) {
+          newSet.delete(p);
+        }
+        setSelectedPaths(newSet);
+        lastClickedIndex.current = flatIndex;
+        return;
+      }
 
       if (isShift && lastClickedIndex.current >= 0) {
         // Range select: from lastClickedIndex to flatIndex

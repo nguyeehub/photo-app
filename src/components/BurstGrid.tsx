@@ -21,7 +21,7 @@ interface BurstGridProps {
     flatIndex: number,
     event: React.MouseEvent
   ) => void;
-  onSelectionChange: (paths: Set<string>, additive: boolean) => void;
+  onSelectionChange: (paths: Set<string>) => void;
   setFlatList: (list: string[][]) => void;
 }
 
@@ -109,6 +109,7 @@ export function BurstGrid({
   const { marqueeRect, handleMouseDown: handleMarqueeMouseDown } =
     useMarqueeSelection({
       containerRef: scrollRef,
+      selectedPaths,
       onSelectionChange,
       enabled: true,
     });

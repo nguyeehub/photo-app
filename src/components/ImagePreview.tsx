@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ImageInfo } from "../types";
 import { Thumbnail } from "./Thumbnail";
@@ -82,6 +82,10 @@ interface ImagePreviewProps {
   currentIndex: number;
   onClose: () => void;
   onNavigate: (index: number) => void;
+  onNavigateNext: () => void;
+  onNavigatePrev: () => void;
+  canNavigateNext: boolean;
+  canNavigatePrev: boolean;
   favouritePhotos: Map<string, number>;
   onToggleFavourite: (path: string) => void;
 }
@@ -91,26 +95,39 @@ export function ImagePreview({
   currentIndex,
   onClose,
   onNavigate,
+  onNavigateNext,
+  onNavigatePrev,
+  canNavigateNext,
+  canNavigatePrev,
   favouritePhotos,
   onToggleFavourite,
 }: ImagePreviewProps) {
   const currentImage = images[currentIndex];
-  const hasPrev = currentIndex > 0;
-  const hasNext = currentIndex < images.length - 1;
+  const [showLikeBurst, setShowLikeBurst] = useState(false);
+  const [likeBurstKey, setLikeBurstKey] = useState(0);
+
+  const triggerLikeBurst = useCallback(() => {
+    setLikeBurstKey((k) => k + 1);
+    setShowLikeBurst(true);
+  }, []);
 
   const goNext = useCallback(() => {
-    if (hasNext) onNavigate(currentIndex + 1);
-  }, [hasNext, currentIndex, onNavigate]);
+    onNavigateNext();
+  }, [onNavigateNext]);
 
   const goPrev = useCallback(() => {
-    if (hasPrev) onNavigate(currentIndex - 1);
-  }, [hasPrev, currentIndex, onNavigate]);
+    onNavigatePrev();
+  }, [onNavigatePrev]);
 
   const toggleCurrentFavourite = useCallback(() => {
     if (currentImage) {
+      const wasFavourited = favouritePhotos.has(currentImage.path);
       onToggleFavourite(currentImage.path);
+      if (!wasFavourited) {
+        triggerLikeBurst();
+      }
     }
-  }, [currentImage, onToggleFavourite]);
+  }, [currentImage, favouritePhotos, onToggleFavourite, triggerLikeBurst]);
 
   const isFavourited = currentImage
     ? favouritePhotos.has(currentImage.path)
@@ -138,6 +155,14 @@ export function ImagePreview({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose, goNext, goPrev, toggleCurrentFavourite]);
+
+  useEffect(() => {
+    if (!showLikeBurst) return;
+    const timer = window.setTimeout(() => {
+      setShowLikeBurst(false);
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [showLikeBurst, likeBurstKey]);
 
   if (!currentImage) return null;
 
@@ -211,6 +236,22 @@ export function ImagePreview({
 
       {/* Image container */}
       <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+        {showLikeBurst && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <div key={likeBurstKey} className="like-burst" aria-hidden="true">
+              <div className="like-burst-ring" />
+              <svg
+                className="like-burst-heart"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+              </svg>
+            </div>
+          </div>
+        )}
+
         <img
           key={currentImage.path}
           src={imageUrl}
@@ -221,7 +262,7 @@ export function ImagePreview({
         />
 
         {/* Left arrow */}
-        {hasPrev && (
+        {canNavigatePrev && (
           <button
             onClick={goPrev}
             className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center bg-black/40 hover:bg-black/70 text-white/70 hover:text-white rounded-full transition-colors cursor-pointer backdrop-blur-sm"
@@ -245,7 +286,7 @@ export function ImagePreview({
         )}
 
         {/* Right arrow */}
-        {hasNext && (
+        {canNavigateNext && (
           <button
             onClick={goNext}
             className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center bg-black/40 hover:bg-black/70 text-white/70 hover:text-white rounded-full transition-colors cursor-pointer backdrop-blur-sm"

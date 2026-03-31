@@ -158,19 +158,9 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [directory, showFavouritesOnly, viewMode]);
 
-  // Handle marquee selection -- merge with existing selection if additive
   const handleMarqueeSelectionChange = useCallback(
-    (paths: Set<string>, additive: boolean) => {
-      if (additive) {
-        // Merge with current selection: keep everything that was already selected + new marquee
-        const merged = new Set(selection.selectedPaths);
-        for (const p of paths) {
-          merged.add(p);
-        }
-        selection.setSelectedPaths(merged);
-      } else {
-        selection.setSelectedPaths(paths);
-      }
+    (paths: Set<string>) => {
+      selection.setSelectedPaths(paths);
     },
     [selection]
   );
@@ -290,6 +280,82 @@ function App() {
 
   const previewContext = getPreviewContext();
 
+  const orderedVisibleGroups = useMemo(
+    () => displaySections.flatMap((s) => s.groups),
+    [displaySections]
+  );
+
+  const canNavigatePreviewPrev = useMemo(() => {
+    if (!previewImages) return false;
+    const groupIndex = orderedVisibleGroups.findIndex(
+      (g) => g.id === previewImages.groupId
+    );
+    if (groupIndex === -1) return false;
+    if (previewImages.imageIndex > 0) return true;
+    return groupIndex > 0;
+  }, [previewImages, orderedVisibleGroups]);
+
+  const canNavigatePreviewNext = useMemo(() => {
+    if (!previewImages) return false;
+    const groupIndex = orderedVisibleGroups.findIndex(
+      (g) => g.id === previewImages.groupId
+    );
+    if (groupIndex === -1) return false;
+    const currentGroup = orderedVisibleGroups[groupIndex];
+    if (previewImages.imageIndex < currentGroup.images.length - 1) return true;
+    return groupIndex < orderedVisibleGroups.length - 1;
+  }, [previewImages, orderedVisibleGroups]);
+
+  const navigatePreviewRelative = useCallback(
+    (delta: 1 | -1) => {
+      setPreviewImages((prev) => {
+        if (!prev) return null;
+
+        const groupIndex = orderedVisibleGroups.findIndex(
+          (g) => g.id === prev.groupId
+        );
+        if (groupIndex === -1) return prev;
+
+        const currentGroup = orderedVisibleGroups[groupIndex];
+        let targetGroupIndex = groupIndex;
+        let targetImageIndex = prev.imageIndex + delta;
+
+        if (targetImageIndex < 0) {
+          targetGroupIndex = groupIndex - 1;
+          if (targetGroupIndex < 0) return prev;
+          const targetGroup = orderedVisibleGroups[targetGroupIndex];
+          targetImageIndex = targetGroup.images.length - 1;
+        } else if (targetImageIndex >= currentGroup.images.length) {
+          targetGroupIndex = groupIndex + 1;
+          if (targetGroupIndex >= orderedVisibleGroups.length) return prev;
+          targetImageIndex = 0;
+        }
+
+        const targetGroup = orderedVisibleGroups[targetGroupIndex];
+        return {
+          groupId: targetGroup.id,
+          imageIndex: targetImageIndex,
+        };
+      });
+    },
+    [orderedVisibleGroups]
+  );
+
+  const handlePreviewNext = useCallback(() => {
+    navigatePreviewRelative(1);
+  }, [navigatePreviewRelative]);
+
+  const handlePreviewPrev = useCallback(() => {
+    navigatePreviewRelative(-1);
+  }, [navigatePreviewRelative]);
+
+  useEffect(() => {
+    if (viewMode === "preview" && !previewContext) {
+      setPreviewImages(null);
+      setViewMode("groups");
+    }
+  }, [viewMode, previewContext]);
+
   return (
     <div className="h-screen flex flex-col">
       <h1 className="sr-only">Photo Explorer</h1>
@@ -341,7 +407,7 @@ function App() {
 
           {loading && <LoadingOverlay />}
 
-          {!loading && viewMode === "groups" && (
+          {!loading && (
             <BurstGrid
               sections={displaySections}
               onGroupClick={handleGroupClick}
@@ -365,6 +431,10 @@ function App() {
           currentIndex={previewContext.currentIndex}
           onClose={handleClosePreview}
           onNavigate={handleNavigatePreview}
+          onNavigateNext={handlePreviewNext}
+          onNavigatePrev={handlePreviewPrev}
+          canNavigateNext={canNavigatePreviewNext}
+          canNavigatePrev={canNavigatePreviewPrev}
           favouritePhotos={favouritePhotos}
           onToggleFavourite={toggleFavouritePhoto}
         />
