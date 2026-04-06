@@ -97,20 +97,25 @@ export function Sidebar({
   return (
     <div
       ref={sidebarRef}
-      className="flex shrink-0 h-full border-r border-warm-800 bg-warm-950 transition-[width,opacity] duration-200 ease-out overflow-hidden"
+      className="flex shrink-0 h-full border-r border-warm-800/60 bg-warm-950/95 backdrop-blur-sm transition-[width,opacity] duration-200 ease-out overflow-hidden"
       style={{ width: visible ? `${width}px` : '0px', opacity: visible ? 1 : 0 }}
       aria-hidden={!visible}
     >
       {/* Sidebar content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden py-2" style={{ minWidth: `${width}px` }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-0.5" style={{ minWidth: `${width}px` }}>
         {/* Favourites section */}
         <SidebarSection
           title="Favourites"
+          icon={
+            <svg className="w-3.5 h-3.5 text-amber-400/60" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            </svg>
+          }
           collapsed={favouritesCollapsed}
           onToggle={() => setFavouritesCollapsed((v) => !v)}
         >
           {favourites.length === 0 ? (
-            <div className="px-5 py-2 text-[11px] text-warm-600 italic">
+            <div className="px-5 py-3 text-[11px] text-warm-600/80 italic select-none">
               No favourites yet
             </div>
           ) : (
@@ -118,11 +123,11 @@ export function Sidebar({
               <button
                 type="button"
                 key={fav.path}
-                className={`flex items-center gap-1.5 px-4 py-1.5 cursor-pointer group rounded-md mx-1 transition-colors w-full text-left ${
+                className={`relative flex items-center gap-2 px-4 py-1.5 cursor-pointer group rounded-lg mx-1 transition-colors w-full text-left ${
                   activePath === fav.path
-                    ? "bg-accent-600/15 text-accent-400"
+                    ? "bg-accent-600/10 text-accent-400 before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[2px] before:bg-accent-500 before:rounded-full"
                     : fav.exists
-                      ? "text-warm-300 hover:bg-warm-800/70 hover:text-warm-100"
+                      ? "text-warm-300 hover:bg-warm-800/40 hover:text-warm-100"
                       : "text-warm-600 line-through"
                 }`}
                 onClick={() => fav.exists && onFolderSelect(fav.path)}
@@ -130,40 +135,36 @@ export function Sidebar({
                 disabled={!fav.exists}
               >
                 <svg
-                  className="w-3.5 h-3.5 shrink-0 text-amber-400"
+                  className="w-4 h-4 shrink-0 text-amber-400/80"
                   fill="currentColor"
                   viewBox="0 0 20 20"
                   aria-hidden="true"
                 >
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
-                <span className="text-xs truncate">{fav.name}</span>
+                <span className={`text-xs truncate ${activePath === fav.path ? "font-medium" : ""}`}>{fav.name}</span>
                 {scannedPaths.has(fav.path) && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent-500/50 shrink-0" title="Previously scanned" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent-400/40 ring-1 ring-accent-400/20 shrink-0" title="Previously scanned" />
                 )}
-                {/* Remove from favourites button */}
+                {/* Remove from favourites button — minus circle */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onToggleFavourite(fav.path);
                   }}
-                  className="ml-auto opacity-0 group-hover:opacity-100 text-warm-500 hover:text-red-400 transition-opacity cursor-pointer p-0.5"
+                  className="ml-auto opacity-0 group-hover:opacity-100 text-warm-500 hover:text-red-400/80 transition-opacity cursor-pointer p-0.5"
                   title="Remove from favourites"
                   aria-label={`Remove ${fav.name} from favourites`}
                 >
                   <svg
-                    className="w-3 h-3"
+                    className="w-3.5 h-3.5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
                     aria-hidden="true"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
+                    <circle cx="12" cy="12" r="9" strokeWidth={1.5} />
+                    <line x1="8" y1="12" x2="16" y2="12" strokeWidth={1.5} strokeLinecap="round" />
                   </svg>
                 </button>
               </button>
@@ -174,6 +175,13 @@ export function Sidebar({
         {/* Devices section */}
         <SidebarSection
           title="Devices"
+          icon={
+            <svg className="w-3.5 h-3.5 text-warm-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="4" width="16" height="12" rx="2" strokeWidth={1.5} />
+              <path d="M8 20h8" strokeLinecap="round" strokeWidth={1.5} />
+              <path d="M12 16v4" strokeWidth={1.5} />
+            </svg>
+          }
           collapsed={devicesCollapsed}
           onToggle={() => setDevicesCollapsed((v) => !v)}
         >
@@ -186,10 +194,11 @@ export function Sidebar({
               onFolderSelect={onFolderSelect}
               scannedPaths={scannedPaths}
               depth={0}
+              icon="device"
             />
           ))}
           {externalDevices.length === 0 && (
-            <div className="px-5 py-2 text-[11px] text-warm-600 italic">
+            <div className="px-5 py-3 text-[11px] text-warm-600/80 italic select-none">
               No devices connected
             </div>
           )}
@@ -198,6 +207,16 @@ export function Sidebar({
         {/* Home section */}
         <SidebarSection
           title="Home"
+          icon={
+            <svg className="w-3.5 h-3.5 text-warm-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
+              />
+            </svg>
+          }
           collapsed={homeCollapsed}
           onToggle={() => setHomeCollapsed((v) => !v)}
         >
@@ -209,6 +228,7 @@ export function Sidebar({
               onFolderSelect={onFolderSelect}
               scannedPaths={scannedPaths}
               depth={0}
+              icon="home"
               defaultExpanded
             />
           )}
@@ -217,6 +237,13 @@ export function Sidebar({
         {/* Volumes section */}
         <SidebarSection
           title="Volumes"
+          icon={
+            <svg className="w-3.5 h-3.5 text-warm-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <ellipse cx="12" cy="6" rx="8" ry="3" strokeWidth={1.5} />
+              <path d="M4 6v6c0 1.657 3.582 3 8 3s8-1.343 8-3V6" strokeWidth={1.5} />
+              <path d="M4 12v6c0 1.657 3.582 3 8 3s8-1.343 8-3v-6" strokeWidth={1.5} />
+            </svg>
+          }
           collapsed={volumesCollapsed}
           onToggle={() => setVolumesCollapsed((v) => !v)}
         >
@@ -229,10 +256,11 @@ export function Sidebar({
               onFolderSelect={onFolderSelect}
               scannedPaths={scannedPaths}
               depth={0}
+              icon="volume"
             />
           ))}
           {volumes.length === 0 && (
-            <div className="px-5 py-2 text-[11px] text-warm-600 italic">
+            <div className="px-5 py-3 text-[11px] text-warm-600/80 italic select-none">
               No volumes found
             </div>
           )}
@@ -241,7 +269,7 @@ export function Sidebar({
 
       {/* Resize handle */}
       <div
-        className="w-1 cursor-col-resize hover:bg-accent-500/40 active:bg-accent-500/60 transition-colors shrink-0"
+        className="w-[3px] cursor-col-resize hover:bg-accent-500/30 active:bg-accent-500/50 transition-colors duration-100 shrink-0"
         onMouseDown={handleMouseDown}
         role="separator"
         aria-orientation="vertical"
@@ -257,6 +285,7 @@ interface SidebarSectionProps {
   title: string;
   collapsed: boolean;
   onToggle: () => void;
+  icon?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -264,27 +293,25 @@ function SidebarSection({
   title,
   collapsed,
   onToggle,
+  icon,
   children,
 }: SidebarSectionProps) {
   return (
-    <div className="mb-1">
+    <div className="mb-2 first:mt-0 mt-1">
       <button
         onClick={onToggle}
-        className="flex items-center gap-1.5 w-full px-3 py-1.5 text-[11px] font-semibold text-warm-500 tracking-wide hover:text-warm-300 transition-colors cursor-pointer"
+        className="flex items-center gap-2 w-full px-3 py-2 text-[11px] font-semibold text-warm-500 uppercase tracking-wider hover:text-warm-300 transition-colors cursor-pointer"
         aria-expanded={!collapsed}
       >
         <svg
-          className={`w-3 h-3 transition-transform duration-150 ${collapsed ? "" : "rotate-90"}`}
+          className={`w-2.5 h-2.5 transition-transform duration-150 ${collapsed ? "" : "rotate-90"}`}
           fill="currentColor"
-          viewBox="0 0 20 20"
+          viewBox="0 0 10 10"
           aria-hidden="true"
         >
-          <path
-            fillRule="evenodd"
-            d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-            clipRule="evenodd"
-          />
+          <path d="M2.5 1.5l5 3.5-5 3.5V1.5z" />
         </svg>
+        {icon}
         {title}
       </button>
       <div
