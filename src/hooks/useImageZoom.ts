@@ -123,34 +123,52 @@ export function useImageZoom(
     if (!el) return;
 
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      e.preventDefault();
-
-      const rect = el.getBoundingClientRect();
-      const cursorX = e.clientX - rect.left - rect.width / 2;
-      const cursorY = e.clientY - rect.top - rect.height / 2;
-
       const s = scaleRef.current;
-      const tx = txRef.current;
-      const ty = tyRef.current;
 
-      const zoomFactor = 1 - e.deltaY * WHEEL_ZOOM_SENSITIVITY;
-      const newScale = clamp(s * zoomFactor, MIN_SCALE, MAX_SCALE);
-      const ratio = newScale / s;
-      const newTx = cursorX - (cursorX - tx) * ratio;
-      const newTy = cursorY - (cursorY - ty) * ratio;
+      if (e.ctrlKey || e.metaKey) {
+        // Pinch-to-zoom or Ctrl+scroll → zoom
+        e.preventDefault();
 
-      const { w: cw, h: ch } = {
-        w: el.clientWidth,
-        h: el.clientHeight,
-      };
-      const { w: iw, h: ih } = baseDimsRef.current;
-      const t = clampTranslation(newTx, newTy, newScale, cw, ch, iw, ih);
+        const rect = el.getBoundingClientRect();
+        const cursorX = e.clientX - rect.left - rect.width / 2;
+        const cursorY = e.clientY - rect.top - rect.height / 2;
 
-      shouldTransitionRef.current = false;
-      setScale(newScale);
-      setTranslateX(t.tx);
-      setTranslateY(t.ty);
+        const tx = txRef.current;
+        const ty = tyRef.current;
+
+        const zoomFactor = 1 - e.deltaY * WHEEL_ZOOM_SENSITIVITY;
+        const newScale = clamp(s * zoomFactor, MIN_SCALE, MAX_SCALE);
+        const ratio = newScale / s;
+        const newTx = cursorX - (cursorX - tx) * ratio;
+        const newTy = cursorY - (cursorY - ty) * ratio;
+
+        const { w: cw, h: ch } = {
+          w: el.clientWidth,
+          h: el.clientHeight,
+        };
+        const { w: iw, h: ih } = baseDimsRef.current;
+        const t = clampTranslation(newTx, newTy, newScale, cw, ch, iw, ih);
+
+        shouldTransitionRef.current = false;
+        setScale(newScale);
+        setTranslateX(t.tx);
+        setTranslateY(t.ty);
+      } else if (s > 1.01) {
+        // Two-finger trackpad scroll while zoomed → pan
+        e.preventDefault();
+
+        const tx = txRef.current;
+        const ty = tyRef.current;
+        const newTx = tx - e.deltaX;
+        const newTy = ty - e.deltaY;
+
+        const { w: iw, h: ih } = baseDimsRef.current;
+        const t = clampTranslation(newTx, newTy, s, el.clientWidth, el.clientHeight, iw, ih);
+
+        shouldTransitionRef.current = false;
+        setTranslateX(t.tx);
+        setTranslateY(t.ty);
+      }
     };
 
     el.addEventListener("wheel", onWheel, { passive: false });

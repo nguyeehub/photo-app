@@ -690,6 +690,22 @@ async fn list_external_devices() -> Result<Vec<VolumeInfo>, String> {
     Ok(devices)
 }
 
+/// Eject an external volume using `diskutil eject`.
+#[tauri::command]
+async fn eject_volume(path: String) -> Result<(), String> {
+    let output = std::process::Command::new("diskutil")
+        .args(["eject", &path])
+        .output()
+        .map_err(|e| format!("Failed to run diskutil eject: {}", e))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Failed to eject volume: {}", stderr.trim()))
+    }
+}
+
 /// Get the path to the favourites JSON file in the app data directory.
 fn get_favourites_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
     let app_data = app_handle
@@ -809,6 +825,7 @@ pub fn run() {
             get_home_dir,
             list_volumes,
             list_external_devices,
+            eject_volume,
             load_favourites,
             save_favourites,
             load_favourite_photos,

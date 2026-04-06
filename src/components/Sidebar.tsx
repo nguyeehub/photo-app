@@ -42,6 +42,18 @@ export function Sidebar({
   const resizingRef = useRef(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
+  const [toast, setToast] = useState<{ message: string; key: number } | null>(null);
+
+  const handleEject = useCallback(async (devicePath: string, deviceName: string) => {
+    try {
+      await invoke("eject_volume", { path: devicePath });
+      setExternalDevices((prev) => prev.filter((d) => d.path !== devicePath));
+      setToast({ message: `"${deviceName}" has been ejected`, key: Date.now() });
+    } catch (err) {
+      console.error("Failed to eject device:", err);
+    }
+  }, []);
+
   // Load home dir and volumes on mount
   useEffect(() => {
     async function init() {
@@ -195,6 +207,7 @@ export function Sidebar({
               scannedPaths={scannedPaths}
               depth={0}
               icon="device"
+              onEject={() => handleEject(dev.path, dev.name)}
             />
           ))}
           {externalDevices.length === 0 && (
@@ -275,6 +288,15 @@ export function Sidebar({
         aria-orientation="vertical"
         aria-label="Resize sidebar"
       />
+
+      {/* Eject toast */}
+      {toast && (
+        <EjectToast
+          key={toast.key}
+          message={toast.message}
+          onDone={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }
@@ -322,6 +344,26 @@ function SidebarSection({
         <div className="overflow-hidden">
           {children}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// -- Eject toast notification ---
+
+function EjectToast({ message, onDone }: { message: string; onDone: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onDone, 3000);
+    return () => clearTimeout(timer);
+  }, [onDone]);
+
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-[toast-in_0.25s_ease-out,toast-out_0.3s_ease-in_2.7s_forwards] pointer-events-none">
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-warm-800/95 backdrop-blur-sm border border-warm-700/50 rounded-xl shadow-lg shadow-black/30">
+        <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+        <span className="text-sm text-warm-200">{message}</span>
       </div>
     </div>
   );

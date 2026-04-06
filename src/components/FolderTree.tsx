@@ -19,6 +19,8 @@ interface FolderTreeProps {
   defaultExpanded?: boolean;
   /** Contextual icon for root-level items */
   icon?: "device" | "volume" | "home" | "folder";
+  /** Called when the eject button is clicked (only for devices) */
+  onEject?: () => void;
 }
 
 export function FolderTree({
@@ -30,6 +32,7 @@ export function FolderTree({
   depth = 0,
   defaultExpanded = false,
   icon = "folder",
+  onEject,
 }: FolderTreeProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [children, setChildren] = useState<DirEntry[] | null>(null);
@@ -157,28 +160,48 @@ export function FolderTree({
           )}
         </div>
 
-        {/* Scan button - appears on hover — photo icon */}
-        <button
-          onClick={handleScanClick}
-          className="opacity-0 group-hover/row:opacity-100 p-0.5 mr-1 text-warm-500 hover:text-accent-400 transition-opacity cursor-pointer shrink-0"
-          title="Scan this folder for photos"
-          aria-label={`Scan ${rootName} for photos`}
-        >
-          <svg
-            className="w-3.5 h-3.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
+        {/* Action buttons - appear on hover */}
+        <div className="flex items-center shrink-0 opacity-0 group-hover/row:opacity-100 transition-opacity">
+          {/* Eject button (devices only) */}
+          {onEject && depth === 0 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEject();
+              }}
+              className="p-0.5 text-warm-500 hover:text-warm-200 transition-colors cursor-pointer"
+              title={`Eject ${rootName}`}
+              aria-label={`Eject ${rootName}`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4l-7 8h14l-7-8z" />
+                <path strokeLinecap="round" strokeWidth={1.5} d="M5 16h14" />
+              </svg>
+            </button>
+          )}
+          {/* Scan button — photo icon */}
+          <button
+            onClick={handleScanClick}
+            className="p-0.5 mr-1 text-warm-500 hover:text-accent-400 transition-colors cursor-pointer"
+            title="Scan this folder for photos"
+            aria-label={`Scan ${rootName} for photos`}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
-            />
-          </svg>
-        </button>
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Children (lazy loaded) -- with indent guide line */}
