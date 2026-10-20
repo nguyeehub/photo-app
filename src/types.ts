@@ -65,3 +65,12 @@ export interface FavouritePhoto {
   path: string;
   favourited_at: number;
 }
+
+/**
+ * A favourited burst group. The group_key is the path of the first image
+ * in the group, which is stable across rescans of the same folder.
+ */
+export interface FavouriteGroup {
+  group_key: string;
+  favourited_at: number;
+}

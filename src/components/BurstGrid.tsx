@@ -14,6 +14,8 @@ interface BurstGridProps {
   onGroupClick: (group: BurstGroup) => void;
   onImageClick: (groupId: number, imageIndex: number) => void;
   favouritePhotos: Map<string, number>;
+  favouriteGroups: Map<string, number>;
+  onToggleFavouriteGroup: (groupKey: string) => void;
   // Selection props
   selectedPaths: Set<string>;
   onItemClick: (
@@ -30,6 +32,8 @@ export function BurstGrid({
   onGroupClick,
   onImageClick,
   favouritePhotos,
+  favouriteGroups,
+  onToggleFavouriteGroup,
   selectedPaths,
   onItemClick,
   onSelectionChange,
@@ -213,6 +217,8 @@ export function BurstGrid({
                   onItemClick={onItemClick}
                   onDragMouseDown={handleDragMouseDown}
                   favouritePhotos={favouritePhotos}
+                  favouriteGroups={favouriteGroups}
+                  onToggleFavouriteGroup={onToggleFavouriteGroup}
                   selectedPaths={selectedPaths}
                 />
               );
@@ -251,6 +257,8 @@ interface BurstGroupCardProps {
   ) => void;
   onDragMouseDown: (event: React.MouseEvent) => void;
   favouritePhotos: Map<string, number>;
+  favouriteGroups: Map<string, number>;
+  onToggleFavouriteGroup: (groupKey: string) => void;
   selectedPaths: Set<string>;
 }
 
@@ -262,9 +270,13 @@ function BurstGroupCard({
   onItemClick,
   onDragMouseDown,
   favouritePhotos,
+  favouriteGroups,
+  onToggleFavouriteGroup,
   selectedPaths,
 }: BurstGroupCardProps) {
   const isBurst = group.count > 1;
+  const groupKey = group.images[0]?.path ?? "";
+  const isGroupFavourited = groupKey ? favouriteGroups.has(groupKey) : false;
   const groupPaths = useMemo(
     () => group.images.map((img) => img.path),
     [group.images]
@@ -360,20 +372,92 @@ function BurstGroupCard({
         </div>
       )}
 
-      {/* Favourite heart badge */}
-      {hasFavourites && (
-        <div className="absolute bottom-2 right-2 z-10">
+      {/* Favourite heart badges (blue = group fav, red = individual fav). Both can show side by side. */}
+      {(hasFavourites || isGroupFavourited) && (
+        <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
+          {isGroupFavourited && (
+            <div
+              className="relative"
+              title="Group favourited"
+              aria-label="Group favourited"
+            >
+              {/* Layered/stacked blue heart to indicate group-level favourite */}
+              <svg
+                className="absolute -left-0.5 -top-0.5 w-4 h-4 text-blue-400/70 drop-shadow-md"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+              </svg>
+              <svg
+                className="relative w-4 h-4 text-blue-500 drop-shadow-md"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="white"
+                strokeWidth={0.75}
+                aria-hidden="true"
+              >
+                <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+              </svg>
+            </div>
+          )}
+          {hasFavourites && (
+            <svg
+              className="w-4 h-4 text-red-500 drop-shadow-md"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="currentColor"
+              strokeWidth={1}
+              aria-hidden="true"
+              aria-label="Has individual favourite"
+            >
+              <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+            </svg>
+          )}
+        </div>
+      )}
+
+      {/* Group-favourite toggle button (only on bursts, appears on hover, top-left area). */}
+      {isBurst && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (groupKey) onToggleFavouriteGroup(groupKey);
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          className={`absolute bottom-2 left-2 z-20 w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-md transition-all cursor-pointer ${
+            isGroupFavourited
+              ? "bg-blue-500/80 text-white opacity-100"
+              : "bg-black/50 text-white/80 opacity-0 group-hover:opacity-100 hover:bg-blue-500/70"
+          }`}
+          aria-label={
+            isGroupFavourited
+              ? "Remove group favourite"
+              : "Favourite entire group"
+          }
+          title={
+            isGroupFavourited
+              ? "Remove group favourite"
+              : "Favourite entire group"
+          }
+        >
           <svg
-            className="w-4 h-4 text-red-500 drop-shadow-md"
+            className="w-3.5 h-3.5"
             viewBox="0 0 24 24"
-            fill="currentColor"
+            fill={isGroupFavourited ? "currentColor" : "none"}
             stroke="currentColor"
-            strokeWidth={1}
+            strokeWidth={2}
             aria-hidden="true"
           >
-            <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+            />
           </svg>
-        </div>
+        </button>
       )}
 
       {/* Stacked card effect for bursts */}

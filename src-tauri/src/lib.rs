@@ -85,6 +85,14 @@ pub struct FavouritePhoto {
     pub favourited_at: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FavouriteGroup {
+    /// Stable identifier for the burst group (path of the first image in the group).
+    pub group_key: String,
+    /// Unix timestamp in milliseconds of when the group was favourited
+    pub favourited_at: i64,
+}
+
 // ── File detection ─────────────────────────────────────────────────────────
 
 fn is_image_file(path: &Path) -> bool {
@@ -810,6 +818,52 @@ async fn save_favourite_photos(
     Ok(())
 }
 
+// ── Favourite groups persistence ───────────────────────────────────────────
+
+/// Get the path to the favourite groups JSON file in the app data directory.
+fn get_favourite_groups_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let app_data = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    fs::create_dir_all(&app_data).map_err(|e| format!("Failed to create app data dir: {}", e))?;
+    Ok(app_data.join("favourite_groups.json"))
+}
+
+/// Load favourite groups from persistent storage.
+#[tauri::command]
+async fn load_favourite_groups(
+    app_handle: tauri::AppHandle,
+) -> Result<Vec<FavouriteGroup>, String> {
+    let fav_path = get_favourite_groups_path(&app_handle)?;
+
+    if !fav_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let content = fs::read_to_string(&fav_path)
+        .map_err(|e| format!("Failed to read favourite groups: {}", e))?;
+
+    let favourites: Vec<FavouriteGroup> = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse favourite groups: {}", e))?;
+
+    Ok(favourites)
+}
+
+/// Save favourite groups to persistent storage.
+#[tauri::command]
+async fn save_favourite_groups(
+    app_handle: tauri::AppHandle,
+    favourites: Vec<FavouriteGroup>,
+) -> Result<(), String> {
+    let fav_path = get_favourite_groups_path(&app_handle)?;
+    let content = serde_json::to_string_pretty(&favourites)
+        .map_err(|e| format!("Failed to serialize favourite groups: {}", e))?;
+    fs::write(&fav_path, content)
+        .map_err(|e| format!("Failed to write favourite groups: {}", e))?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -830,6 +884,8 @@ pub fn run() {
             save_favourites,
             load_favourite_photos,
             save_favourite_photos,
+            load_favourite_groups,
+            save_favourite_groups,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

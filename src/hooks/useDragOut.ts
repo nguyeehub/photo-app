@@ -13,11 +13,17 @@ interface UseDragOutOptions {
 
 export interface UseDragOutReturn {
   /**
-   * Call on mousedown on a selected tile.
+   * Call on mousedown on a tile.
    * Stores the start position. The actual drag is triggered on mousemove
    * if the mouse moves beyond the threshold.
+   *
+   * If `pathsOverride` is provided, drags those paths instead of the
+   * current `selectedPaths` (used for dragging a single unselected item).
    */
-  handleDragMouseDown: (event: React.MouseEvent) => void;
+  handleDragMouseDown: (
+    event: React.MouseEvent,
+    pathsOverride?: string[]
+  ) => void;
   /** Whether a drag operation is currently in flight */
   isDragging: boolean;
 }
@@ -35,11 +41,10 @@ export function useDragOut({
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
 
-  const initiateNativeDrag = useCallback(async () => {
-    if (selectedPaths.size === 0) return;
+  const initiateNativeDrag = useCallback(async (paths: string[]) => {
+    if (paths.length === 0) return;
 
     isDragging.current = true;
-    const paths = Array.from(selectedPaths);
 
     try {
       // Use the first selected image's thumbnail as the drag preview icon
@@ -61,12 +66,18 @@ export function useDragOut({
       console.error("Native drag failed:", err);
       isDragging.current = false;
     }
-  }, [selectedPaths]);
+  }, []);
 
   const handleDragMouseDown = useCallback(
-    (event: React.MouseEvent) => {
-      if (!enabled || selectedPaths.size === 0) return;
+    (event: React.MouseEvent, pathsOverride?: string[]) => {
+      if (!enabled) return;
       if (event.button !== 0) return;
+
+      const paths =
+        pathsOverride && pathsOverride.length > 0
+          ? pathsOverride
+          : Array.from(selectedPaths);
+      if (paths.length === 0) return;
 
       dragStartPos.current = { x: event.clientX, y: event.clientY };
 
@@ -80,7 +91,7 @@ export function useDragOut({
         if (distance >= DRAG_THRESHOLD) {
           // Past threshold -- initiate native drag
           cleanup();
-          initiateNativeDrag();
+          initiateNativeDrag(paths);
         }
       };
 
@@ -104,6 +115,8 @@ export function useDragOut({
     },
     [enabled, selectedPaths, initiateNativeDrag]
   );
+
+
 
   return {
     handleDragMouseDown,

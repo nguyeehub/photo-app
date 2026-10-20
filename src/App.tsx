@@ -4,6 +4,7 @@ import "./App.css";
 import {
   BurstGroup,
   FavouriteFolder,
+  FavouriteGroup,
   FavouritePhoto,
   ScanResult,
   SortOrder,
@@ -40,6 +41,10 @@ function App() {
   const [favouritePhotos, setFavouritePhotos] = useState<Map<string, number>>(
     new Map()
   );
+  // Favourite groups state (key = first image path of the group)
+  const [favouriteGroups, setFavouriteGroups] = useState<Map<string, number>>(
+    new Map()
+  );
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
 
   // Multi-selection state
@@ -59,6 +64,14 @@ function App() {
       .map((section) => {
         const filteredGroups = section.groups
           .map((group) => {
+            const groupKey = group.images[0]?.path;
+            const isGroupFav = groupKey
+              ? favouriteGroups.has(groupKey)
+              : false;
+
+            // If the whole group is favourited, keep all its images intact.
+            if (isGroupFav) return group;
+
             const favImages = group.images.filter((img) =>
               favouritePhotos.has(img.path)
             );
@@ -80,7 +93,7 @@ function App() {
         };
       })
       .filter((s): s is NonNullable<typeof s> => s !== null);
-  }, [dateSections, showFavouritesOnly, favouritePhotos]);
+  }, [dateSections, showFavouritesOnly, favouritePhotos, favouriteGroups]);
 
   // Compute all visible image paths (for Cmd+A select all)
   const allVisiblePaths = useMemo(() => {
@@ -119,6 +132,25 @@ function App() {
       }
     }
     loadFavPhotos();
+  }, []);
+
+  // Load favourite groups on mount
+  useEffect(() => {
+    async function loadFavGroups() {
+      try {
+        const favGroups = await invoke<FavouriteGroup[]>(
+          "load_favourite_groups"
+        );
+        const map = new Map<string, number>();
+        for (const fg of favGroups) {
+          map.set(fg.group_key, fg.favourited_at);
+        }
+        setFavouriteGroups(map);
+      } catch (err) {
+        console.error("Failed to load favourite groups:", err);
+      }
+    }
+    loadFavGroups();
   }, []);
 
   // Keyboard shortcuts
@@ -237,6 +269,31 @@ function App() {
       }
     },
     [favouritePhotos]
+  );
+
+  const toggleFavouriteGroup = useCallback(
+    async (groupKey: string) => {
+      const newMap = new Map(favouriteGroups);
+      if (newMap.has(groupKey)) {
+        newMap.delete(groupKey);
+      } else {
+        newMap.set(groupKey, Date.now());
+      }
+      setFavouriteGroups(newMap);
+
+      const favourites_list: FavouriteGroup[] = Array.from(
+        newMap.entries()
+      ).map(([k, ts]) => ({ group_key: k, favourited_at: ts }));
+
+      try {
+        await invoke("save_favourite_groups", {
+          favourites: favourites_list,
+        });
+      } catch (err) {
+        console.error("Failed to save favourite groups:", err);
+      }
+    },
+    [favouriteGroups]
   );
 
   const handleGroupClick = useCallback((group: BurstGroup) => {
@@ -413,6 +470,8 @@ function App() {
               onGroupClick={handleGroupClick}
               onImageClick={handleImageClick}
               favouritePhotos={favouritePhotos}
+              favouriteGroups={favouriteGroups}
+              onToggleFavouriteGroup={toggleFavouriteGroup}
               selectedPaths={selection.selectedPaths}
               onItemClick={selection.handleItemClick}
               onSelectionChange={handleMarqueeSelectionChange}
@@ -437,6 +496,11 @@ function App() {
           canNavigatePrev={canNavigatePreviewPrev}
           favouritePhotos={favouritePhotos}
           onToggleFavourite={toggleFavouritePhoto}
+          favouriteGroups={favouriteGroups}
+          onToggleFavouriteGroup={toggleFavouriteGroup}
+          selectedPaths={selection.selectedPaths}
+          setSelectedPaths={selection.setSelectedPaths}
+          clearSelection={selection.clearSelection}
         />
       )}
     </div>

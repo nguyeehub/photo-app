@@ -4,6 +4,7 @@ import { ImageInfo } from "../types";
 import { Thumbnail } from "./Thumbnail";
 import { ZoomControls } from "./ZoomControls";
 import { useImageZoom } from "../hooks/useImageZoom";
+import { useDragOut } from "../hooks/useDragOut";
 
 // ── Thumbnail strip with auto-scroll ────────────────────────────────────
 
@@ -12,11 +13,15 @@ function ThumbnailStrip({
   currentIndex,
   onNavigate,
   favouritePhotos,
+  selectedPaths,
+  onThumbMouseDown,
 }: {
   images: ImageInfo[];
   currentIndex: number;
   onNavigate: (index: number) => void;
   favouritePhotos: Map<string, number>;
+  selectedPaths: Set<string>;
+  onThumbMouseDown: (event: React.MouseEvent, path: string) => void;
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
 
@@ -42,16 +47,26 @@ function ThumbnailStrip({
       >
         {images.map((img, idx) => {
           const isFav = favouritePhotos.has(img.path);
+          const isSelected = selectedPaths.has(img.path);
+          const isCurrent = idx === currentIndex;
+          const ringClass = isCurrent
+            ? "ring-2 ring-accent-500"
+            : isSelected
+              ? "ring-2 ring-blue-500"
+              : "";
+          const opacityClass = isCurrent
+            ? "opacity-100 scale-105"
+            : isSelected
+              ? "opacity-90"
+              : "opacity-35 hover:opacity-60";
           return (
             <button
               key={img.path}
               onClick={() => onNavigate(idx)}
-              className={`relative shrink-0 w-14 h-14 rounded-lg overflow-hidden transition-all cursor-pointer ${
-                idx === currentIndex
-                  ? "ring-2 ring-accent-500 opacity-100 scale-105"
-                  : "opacity-35 hover:opacity-60"
-              }`}
+              onMouseDown={(e) => onThumbMouseDown(e, img.path)}
+              className={`relative shrink-0 w-14 h-14 rounded-lg overflow-hidden transition-all cursor-pointer ${ringClass} ${opacityClass}`}
               aria-label={`View image ${idx + 1}: ${img.filename}`}
+              aria-selected={isSelected}
             >
               <Thumbnail
                 imagePath={img.path}
@@ -90,6 +105,12 @@ interface ImagePreviewProps {
   canNavigatePrev: boolean;
   favouritePhotos: Map<string, number>;
   onToggleFavourite: (path: string) => void;
+  favouriteGroups: Map<string, number>;
+  onToggleFavouriteGroup: (groupKey: string) => void;
+  /** Multi-selection state shared with the grid */
+  selectedPaths: Set<string>;
+  setSelectedPaths: React.Dispatch<React.SetStateAction<Set<string>>>;
+  clearSelection: () => void;
 }
 
 export function ImagePreview({
@@ -103,6 +124,11 @@ export function ImagePreview({
   canNavigatePrev,
   favouritePhotos,
   onToggleFavourite,
+  favouriteGroups,
+  onToggleFavouriteGroup,
+  selectedPaths,
+  setSelectedPaths,
+  clearSelection,
 }: ImagePreviewProps) {
   const currentImage = images[currentIndex];
   const [showLikeBurst, setShowLikeBurst] = useState(false);
@@ -144,6 +170,73 @@ export function ImagePreview({
     ? favouritePhotos.has(currentImage.path)
     : false;
 
+  // Group-level favourite: only meaningful when the burst has more than 1 image.
+  const groupKey = images[0]?.path ?? "";
+  const isBurstGroup = images.length > 1;
+  const isGroupFavourited = groupKey
+    ? favouriteGroups.has(groupKey)
+    : false;
+
+  const toggleCurrentGroupFavourite = useCallback(() => {
+    if (groupKey && isBurstGroup) {
+      onToggleFavouriteGroup(groupKey);
+    }
+  }, [groupKey, isBurstGroup, onToggleFavouriteGroup]);
+
+  // ── Shift+Arrow range selection ────────────────────────────────────────
+  // Anchor is the index within `images` where the current shift-range started.
+  // Null means no active shift-range; the next Shift+Arrow seeds it with
+  // the current index.
+  const shiftAnchorRef = useRef<number | null>(null);
+
+  // Reset the shift-range anchor whenever the current burst changes (e.g.
+  // user navigates across group boundaries or opens a different preview).
+  useEffect(() => {
+    shiftAnchorRef.current = null;
+  }, [images]);
+
+  const extendSelectionBy = useCallback(
+    (delta: 1 | -1) => {
+      if (shiftAnchorRef.current === null) {
+        shiftAnchorRef.current = currentIndex;
+      }
+      const target = currentIndex + delta;
+      // Shift-range is scoped to the current burst; don't cross boundaries.
+      if (target < 0 || target >= images.length) return;
+
+      const anchor = shiftAnchorRef.current;
+      const lo = Math.min(anchor, target);
+      const hi = Math.max(anchor, target);
+
+      const newSet = new Set<string>();
+      for (let i = lo; i <= hi; i++) {
+        newSet.add(images[i].path);
+      }
+      setSelectedPaths(newSet);
+      onNavigate(target);
+    },
+    [currentIndex, images, onNavigate, setSelectedPaths]
+  );
+
+  // Native drag-out from the thumbnail strip. Always enabled: when the thumb
+  // is part of the current selection we drag all selected paths; otherwise
+  // we drag just that single thumb.
+  const { handleDragMouseDown } = useDragOut({
+    selectedPaths,
+    enabled: true,
+  });
+
+  const handleThumbMouseDown = useCallback(
+    (event: React.MouseEvent, path: string) => {
+      if (selectedPaths.has(path)) {
+        handleDragMouseDown(event);
+      } else {
+        handleDragMouseDown(event, [path]);
+      }
+    },
+    [selectedPaths, handleDragMouseDown]
+  );
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Zoom shortcuts (Cmd/Ctrl + key)
@@ -167,24 +260,55 @@ export function ImagePreview({
 
       switch (e.key) {
         case "Escape":
+          shiftAnchorRef.current = null;
+          if (selectedPaths.size > 0) {
+            clearSelection();
+            return;
+          }
           onClose();
           break;
         case "ArrowRight":
-          goNext();
+          if (e.shiftKey) {
+            e.preventDefault();
+            extendSelectionBy(1);
+          } else {
+            shiftAnchorRef.current = null;
+            goNext();
+          }
           break;
         case "ArrowLeft":
-          goPrev();
+          if (e.shiftKey) {
+            e.preventDefault();
+            extendSelectionBy(-1);
+          } else {
+            shiftAnchorRef.current = null;
+            goPrev();
+          }
           break;
         case "ArrowUp":
           e.preventDefault();
-          toggleCurrentFavourite();
+          if (e.shiftKey) {
+            toggleCurrentGroupFavourite();
+          } else {
+            toggleCurrentFavourite();
+          }
           break;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, goNext, goPrev, toggleCurrentFavourite, zoom]);
+  }, [
+    onClose,
+    goNext,
+    goPrev,
+    toggleCurrentFavourite,
+    toggleCurrentGroupFavourite,
+    extendSelectionBy,
+    selectedPaths,
+    clearSelection,
+    zoom,
+  ]);
 
   useEffect(() => {
     if (!showLikeBurst) return;
@@ -236,6 +360,56 @@ export function ImagePreview({
               />
             </svg>
           </button>
+          {isBurstGroup && (
+            <button
+              onClick={toggleCurrentGroupFavourite}
+              className={`shrink-0 p-1 rounded-md transition-colors cursor-pointer relative ${
+                isGroupFavourited
+                  ? "text-blue-500 hover:text-blue-400"
+                  : "text-warm-500 hover:text-blue-400"
+              }`}
+              aria-label={
+                isGroupFavourited
+                  ? "Remove group favourite"
+                  : "Favourite entire group"
+              }
+              title={
+                isGroupFavourited
+                  ? "Remove group favourite (Shift+Up Arrow)"
+                  : "Favourite entire group (Shift+Up Arrow)"
+              }
+            >
+              {/* Layered/stacked heart icon */}
+              <svg
+                className="absolute left-0.5 top-0.5 w-5 h-5 opacity-50"
+                viewBox="0 0 24 24"
+                fill={isGroupFavourited ? "currentColor" : "none"}
+                stroke="currentColor"
+                strokeWidth={2}
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+                />
+              </svg>
+              <svg
+                className="relative w-5 h-5"
+                viewBox="0 0 24 24"
+                fill={isGroupFavourited ? "currentColor" : "none"}
+                stroke="currentColor"
+                strokeWidth={2}
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+                />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-warm-400 tabular-nums">
@@ -364,6 +538,8 @@ export function ImagePreview({
           currentIndex={currentIndex}
           onNavigate={onNavigate}
           favouritePhotos={favouritePhotos}
+          selectedPaths={selectedPaths}
+          onThumbMouseDown={handleThumbMouseDown}
         />
       )}
     </div>

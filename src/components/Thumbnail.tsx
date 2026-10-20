@@ -73,6 +73,8 @@ export function Thumbnail({
       className={`object-cover animate-thumb-in ${className}`}
       onClick={onClick}
       loading="lazy"
+      draggable={false}
+      onDragStart={(e) => e.preventDefault()}
     />
   );
 }
